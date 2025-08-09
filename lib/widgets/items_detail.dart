@@ -6,6 +6,7 @@ import 'package:flutter_application_1/widgets/raise_issue.dart';
 import 'package:flutter_application_1/widgets/issue_model.dart';
 import 'package:flutter_application_1/widgets/history_entry_model.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'dart:io';
 import 'dart:math';
 
@@ -48,12 +49,205 @@ class Information {
   });
 }
 
+// Data model for an assignment.
+class Assignment {
+  final String staffName;
+  final String location;
+  final DateTime timestamp;
+
+  Assignment({
+    required this.staffName,
+    required this.location,
+    required this.timestamp,
+  });
+}
+
+// New widget for assigning an item to a user.
+class AssignToUserWidget extends StatefulWidget {
+  final Function(Assignment) onSave;
+  final VoidCallback onClose;
+
+  const AssignToUserWidget({
+    Key? key,
+    required this.onSave,
+    required this.onClose,
+  }) : super(key: key);
+
+  @override
+  State<AssignToUserWidget> createState() => _AssignToUserWidgetState();
+}
+
+class _AssignToUserWidgetState extends State<AssignToUserWidget> {
+  final _formKey = GlobalKey<FormState>();
+  final _staffNameController = TextEditingController();
+  final _locationController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _staffNameController.dispose();
+    _locationController.dispose();
+    super.dispose();
+  }
+
+  void _saveAssignment() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    final newAssignment = Assignment(
+      staffName: _staffNameController.text.trim(),
+      location: _locationController.text.trim(),
+      timestamp: DateTime.now(),
+    );
+
+    Future.delayed(const Duration(milliseconds: 500), () {
+      widget.onSave(newAssignment);
+      setState(() {
+        _isLoading = false;
+      });
+      widget.onClose();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: SingleChildScrollView(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Assign To User',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: widget.onClose,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.close,
+                            color: Colors.grey[600],
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 30),
+                  TextFormField(
+                    controller: _staffNameController,
+                    decoration: InputDecoration(
+                      hintText: 'Staff Name',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter the staff name';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _locationController,
+                    decoration: InputDecoration(
+                      hintText: 'Location',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter the location';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 40),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _saveAssignment,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        disabledBackgroundColor: Colors.grey[400],
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Text(
+                              'Save Assignment',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class ItemDetailsScreen extends StatefulWidget {
   final ItemModel item;
+  final Function(ItemModel) onUpdateItem;
 
   const ItemDetailsScreen({
     Key? key,
     required this.item,
+    required this.onUpdateItem,
   }) : super(key: key);
 
   @override
@@ -93,13 +287,19 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
   List<Comment> comments = [];
   List<Attachment> attachments = [];
   List<Information> informationEntries = [];
-  List<HistoryEntry> _historyItems = [];
+  final List<HistoryEntry> _historyItems = [];
 
+  // State variable to hold the scanned QR code ID
+  String? _taggedQrCode;
+
+  // Create an instance of ImagePicker
   final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
+    // Initialize the tagged QR code from the item data
+    _taggedQrCode = widget.item.qrCodeId;
     _addHistoryEntry(
       title: 'Item Details Viewed',
       description: 'You are now viewing this item\'s details.',
@@ -246,6 +446,60 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     }
   }
 
+  // New method to handle QR tagging
+  Future<void> _handleTagging() async {
+    String barcodeScanRes = await FlutterBarcodeScanner.scanBarcode(
+        "#ff6666", "Cancel", true, ScanMode.QR);
+
+    if (barcodeScanRes != '-1' && barcodeScanRes.isNotEmpty) {
+      // Create a new item with the updated qrCodeId
+      final updatedItem = widget.item.copyWith(
+        qrCodeId: barcodeScanRes,
+        isTagged: true,
+      );
+
+      // Call the callback to update the item in the parent list
+      widget.onUpdateItem(updatedItem);
+
+      setState(() {
+        _taggedQrCode = barcodeScanRes;
+      });
+
+      _addHistoryEntry(
+        title: 'Item Tagged',
+        description: 'Item was tagged with QR code: $barcodeScanRes',
+        icon: Icons.qr_code,
+      );
+    }
+  }
+
+  // New method to handle the "Assign to User" pop-up.
+  void _handleAssignToUser() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return AssignToUserWidget(
+          onSave: (newAssignment) {
+            _addHistoryEntry(
+              title: 'Item Assigned',
+              description:
+                  'Assigned to ${newAssignment.staffName} at ${newAssignment.location}.',
+              icon: Icons.person,
+            );
+            Navigator.of(context).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Item assigned successfully!')),
+            );
+          },
+          onClose: () {
+            Navigator.of(context).pop();
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _presentDatePicker() async {
     final now = DateTime.now();
     final pickedDate = await showDatePicker(
@@ -327,6 +581,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
           },
           onClose: () {
             Navigator.of(context).pop();
+            // Optionally, you can add this to the item's history or issues list
           },
         );
       },
@@ -576,7 +831,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Center(child: _buildItemIcon(widget.item.itemType)),
+                    child: Center(child: buildItemIcon(widget.item.itemType)),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -613,18 +868,23 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
               ],
             ),
             const SizedBox(height: 24),
-            Row(
-              children: [
-                Icon(Icons.person_outline, color: Colors.grey[600]),
-                const SizedBox(width: 8),
-                Text(
-                  'Assign To User',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey[600],
+            // New GestureDetector for "Assign to User"
+            GestureDetector(
+              onTap: _handleAssignToUser,
+              child: Row(
+                children: [
+                  Icon(Icons.person_outline, color: Colors.grey[600]),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Assign To User',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                      decoration: TextDecoration.underline,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             const SizedBox(height: 24),
             Row(
@@ -685,11 +945,11 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _handleRaiseIssue,
-                      child: const Text('Add New Issue'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.black,
                         foregroundColor: Colors.white,
                       ),
+                      child: const Text('Add New Issue'),
                     ),
                   ),
                 ],
@@ -887,11 +1147,11 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _saveComment,
-                      child: const Text('Add Comment'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.black,
                         foregroundColor: Colors.white,
                       ),
+                      child: const Text('Add Comment'),
                     ),
                   ),
                 ],
@@ -903,7 +1163,43 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
               isExpanded: tagsExpanded,
               onTap: () => setState(() => tagsExpanded = !tagsExpanded),
               hasSaveButton: false,
-              expandedContent: Text('Tags will be displayed here.'),
+              expandedContent: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_taggedQrCode != null)
+                    Text(
+                      'Tagged with QR Code: $_taggedQrCode',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[800],
+                      ),
+                    )
+                  else
+                    const Text(
+                      'This item is not yet tagged.',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.red,
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: widget.item.isTagged ? null : _handleTagging,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: Text(widget.item.isTagged
+                          ? 'Already Tagged'
+                          : 'Scan to Tag'),
+                    ),
+                  ),
+                ],
+              ),
             ),
             _buildExpandableSection(
               title: 'Attachments',
@@ -922,7 +1218,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _pickAttachment,
-                      child: Text('Add Attachment'),
+                      child: const Text('Add Attachment'),
                     ),
                   ),
                 ],
@@ -1151,6 +1447,15 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
             ),
           ),
         );
+      case ItemType.furniture:
+        return const Icon(Icons.chair, size: 40, color: Colors.brown);
+      case ItemType.monitor:
+        return const Icon(Icons.monitor, size: 40, color: Colors.black);
+      case ItemType.tablet:
+        return const Icon(Icons.tablet_android,
+            size: 40, color: Colors.blueGrey);
+      case ItemType.webcam:
+        return const Icon(Icons.videocam, size: 40, color: Colors.grey);
       default:
         return Icon(Icons.inventory, color: Colors.grey[600]);
     }

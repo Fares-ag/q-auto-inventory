@@ -23,6 +23,7 @@ class ItemModel {
   final bool isTagged;
   final bool isSeenToday;
   final bool isWrittenOff;
+  final String? qrCodeId;
 
   ItemModel({
     required this.id,
@@ -36,12 +37,44 @@ class ItemModel {
     this.isTagged = false,
     this.isSeenToday = false,
     this.isWrittenOff = false,
+    this.qrCodeId,
   });
+
+  // A factory constructor to create a new instance with updated properties.
+  ItemModel copyWith({
+    String? id,
+    String? name,
+    String? category,
+    String? variants,
+    String? supplier,
+    String? company,
+    String? date,
+    ItemType? itemType,
+    bool? isTagged,
+    bool? isSeenToday,
+    bool? isWrittenOff,
+    String? qrCodeId,
+  }) {
+    return ItemModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      category: category ?? this.category,
+      variants: variants ?? this.variants,
+      supplier: supplier ?? this.supplier,
+      company: company ?? this.company,
+      date: date ?? this.date,
+      itemType: itemType ?? this.itemType,
+      isTagged: isTagged ?? this.isTagged,
+      isSeenToday: isSeenToday ?? this.isSeenToday,
+      isWrittenOff: isWrittenOff ?? this.isWrittenOff,
+      qrCodeId: qrCodeId ?? this.qrCodeId,
+    );
+  }
 }
 
 // Enum to represent the type of item, used for the icon.
 // Added the missing enum members to fix the errors.
-enum ItemType { laptop, keyboard, furniture, monitor, tablet, webcam }
+enum ItemType { laptop, keyboard, furniture, monitor, tablet, webcam, other }
 
 // A helper widget for building the item icon.
 Widget buildItemIcon(ItemType type) {

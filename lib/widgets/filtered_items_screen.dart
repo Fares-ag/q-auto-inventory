@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/widgets/item_model.dart';
 import 'package:flutter_application_1/widgets/items_detail.dart';
-import 'package:flutter_application_1/widgets/item_model.dart'; // Add this import
 
 // This screen displays the full list of items with filtering and search capabilities.
 class FilteredItemsScreen extends StatefulWidget {
   final List<ItemModel> items;
+  final Function(ItemModel) onUpdateItem;
 
   const FilteredItemsScreen({
     Key? key,
     required this.items,
+    required this.onUpdateItem,
   }) : super(key: key);
 
   @override
@@ -76,6 +77,11 @@ class _FilteredItemsScreenState extends State<FilteredItemsScreen> {
     });
   }
 
+  void _updateItemAndFilter(ItemModel updatedItem) {
+    widget.onUpdateItem(updatedItem);
+    _applyFilters();
+  }
+
   // Helper function to build a filter button.
   Widget _buildFilterButton(ItemFilter filter, String label) {
     bool isSelected = _selectedFilter == filter;
@@ -112,7 +118,10 @@ class _FilteredItemsScreenState extends State<FilteredItemsScreen> {
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (context) => ItemDetailsScreen(item: item),
+            builder: (context) => ItemDetailsScreen(
+              item: item,
+              onUpdateItem: _updateItemAndFilter,
+            ),
           ),
         );
       },

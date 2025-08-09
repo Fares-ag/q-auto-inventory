@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_application_1/widgets/root_screen.dart'; // Import the new RootScreen
-import 'package:flutter_application_1/widgets/items_screen.dart'; // This is now a content screen
-import 'package:flutter_application_1/widgets/dashboard_screen.dart'; // This is now a content screen
-import 'package:flutter_application_1/widgets/item_model.dart'; // Keep imports for data models
-import 'package:flutter_application_1/widgets/issue_model.dart';
-import 'package:flutter_application_1/widgets/history_entry_model.dart';
-import 'dart:math';
+// This is now a content screen
+// This is now a content screen
+// Keep imports for data models
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();

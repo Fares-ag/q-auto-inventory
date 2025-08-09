@@ -52,7 +52,7 @@ class _AddItemWidgetState extends State<AddItemWidget> {
         backgroundColor: Colors.transparent,
         builder: (BuildContext context) {
           return Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(20),
@@ -63,16 +63,18 @@ class _AddItemWidgetState extends State<AddItemWidget> {
               child: Wrap(
                 children: <Widget>[
                   ListTile(
-                    leading: Icon(Icons.photo_library, color: Colors.blue),
-                    title: Text('Choose from Gallery'),
+                    leading:
+                        const Icon(Icons.photo_library, color: Colors.blue),
+                    title: const Text('Choose from Gallery'),
                     onTap: () {
                       Navigator.of(context).pop();
                       _getImageFromSource(ImageSource.gallery);
                     },
                   ),
                   ListTile(
-                    leading: Icon(Icons.photo_camera, color: Colors.green),
-                    title: Text('Take a Photo'),
+                    leading:
+                        const Icon(Icons.photo_camera, color: Colors.green),
+                    title: const Text('Take a Photo'),
                     onTap: () {
                       Navigator.of(context).pop();
                       _getImageFromSource(ImageSource.camera);
@@ -81,8 +83,8 @@ class _AddItemWidgetState extends State<AddItemWidget> {
                   // Conditionally show an option to remove the photo.
                   if (_selectedImage != null)
                     ListTile(
-                      leading: Icon(Icons.delete, color: Colors.red),
-                      title: Text('Remove Photo'),
+                      leading: const Icon(Icons.delete, color: Colors.red),
+                      title: const Text('Remove Photo'),
                       onTap: () {
                         Navigator.of(context).pop();
                         setState(() {
@@ -91,8 +93,8 @@ class _AddItemWidgetState extends State<AddItemWidget> {
                       },
                     ),
                   ListTile(
-                    leading: Icon(Icons.cancel, color: Colors.grey),
-                    title: Text('Cancel'),
+                    leading: const Icon(Icons.cancel, color: Colors.grey),
+                    title: const Text('Cancel'),
                     onTap: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -176,7 +178,7 @@ class _AddItemWidgetState extends State<AddItemWidget> {
       );
 
       // Simulate a network delay for saving the item.
-      await Future.delayed(Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 500));
 
       // Call the onSave callback with the new item's data.
       if (widget.onSave != null) {
@@ -189,7 +191,7 @@ class _AddItemWidgetState extends State<AddItemWidget> {
       _clearForm();
 
       // Close the modal after a short delay to show the success message.
-      Future.delayed(Duration(milliseconds: 1500), () {
+      Future.delayed(const Duration(milliseconds: 1500), () {
         if (widget.onClose != null) {
           widget.onClose!();
         }
@@ -227,7 +229,7 @@ class _AddItemWidgetState extends State<AddItemWidget> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
+                  const Text(
                     'Add Item',
                     style: TextStyle(
                       fontSize: 28,
@@ -300,11 +302,11 @@ class _AddItemWidgetState extends State<AddItemWidget> {
                                           child: Container(
                                             width: 32,
                                             height: 32,
-                                            decoration: BoxDecoration(
+                                            decoration: const BoxDecoration(
                                               color: Colors.black54,
                                               shape: BoxShape.circle,
                                             ),
-                                            child: Icon(
+                                            child: const Icon(
                                               Icons.close,
                                               color: Colors.white,
                                               size: 20,
@@ -331,8 +333,8 @@ class _AddItemWidgetState extends State<AddItemWidget> {
                                         color: Colors.grey[500],
                                       ),
                                     ),
-                                    SizedBox(height: 16),
-                                    Text(
+                                    const SizedBox(height: 16),
+                                    const Text(
                                       'Take a photo of your item',
                                       style: TextStyle(
                                         fontSize: 18,
@@ -340,7 +342,7 @@ class _AddItemWidgetState extends State<AddItemWidget> {
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                    SizedBox(height: 8),
+                                    const SizedBox(height: 8),
                                     Text(
                                       'Tap to add photo',
                                       style: TextStyle(
@@ -352,7 +354,7 @@ class _AddItemWidgetState extends State<AddItemWidget> {
                                 ),
                         ),
                       ),
-                      SizedBox(height: 30),
+                      const SizedBox(height: 30),
                       TextFormField(
                         controller: _nameController,
                         decoration: InputDecoration(
@@ -372,9 +374,9 @@ class _AddItemWidgetState extends State<AddItemWidget> {
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide:
-                                BorderSide(color: Colors.blue, width: 2),
+                                const BorderSide(color: Colors.blue, width: 2),
                           ),
-                          contentPadding: EdgeInsets.symmetric(
+                          contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 16,
                           ),
@@ -386,7 +388,7 @@ class _AddItemWidgetState extends State<AddItemWidget> {
                           return null;
                         },
                       ),
-                      SizedBox(height: 20),
+                      const SizedBox(height: 20),
                       TextFormField(
                         controller: _descriptionController,
                         maxLines: 3,
@@ -407,15 +409,15 @@ class _AddItemWidgetState extends State<AddItemWidget> {
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide:
-                                BorderSide(color: Colors.blue, width: 2),
+                                const BorderSide(color: Colors.blue, width: 2),
                           ),
-                          contentPadding: EdgeInsets.symmetric(
+                          contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 16,
                           ),
                         ),
                       ),
-                      SizedBox(height: 20),
+                      const SizedBox(height: 20),
                       TextFormField(
                         controller: _serialNumberController,
                         decoration: InputDecoration(
@@ -435,15 +437,15 @@ class _AddItemWidgetState extends State<AddItemWidget> {
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide:
-                                BorderSide(color: Colors.blue, width: 2),
+                                const BorderSide(color: Colors.blue, width: 2),
                           ),
-                          contentPadding: EdgeInsets.symmetric(
+                          contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 16,
                           ),
                         ),
                       ),
-                      SizedBox(height: 40),
+                      const SizedBox(height: 40),
                     ],
                   ),
                 ),
@@ -468,7 +470,7 @@ class _AddItemWidgetState extends State<AddItemWidget> {
                     disabledBackgroundColor: Colors.grey[400],
                   ),
                   child: _isLoading
-                      ? SizedBox(
+                      ? const SizedBox(
                           width: 24,
                           height: 24,
                           child: CircularProgressIndicator(
@@ -477,7 +479,7 @@ class _AddItemWidgetState extends State<AddItemWidget> {
                                 AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : Text(
+                      : const Text(
                           'Save',
                           style: TextStyle(
                             fontSize: 18,

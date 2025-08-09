@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter_application_1/widgets/add_item.dart';
 import 'package:flutter_application_1/widgets/item_model.dart';
 import 'package:flutter_application_1/widgets/filtered_items_screen.dart';
-import 'package:flutter_application_1/widgets/items_detail.dart';
-import 'package:flutter_application_1/widgets/dashboard_screen.dart';
-import 'package:flutter_application_1/widgets/history_entry_model.dart';
-import 'package:flutter_application_1/widgets/issue_model.dart';
+import 'package:flutter_application_1/widgets/dashboard_screen.dart'; // New import
+import 'package:flutter_application_1/widgets/history_entry_model.dart'; // New import for dummy data
+import 'package:flutter_application_1/widgets/issue_model.dart'; // New import for dummy data
 import 'dart:math';
 
 // This is now a self-contained screen that gets data and callbacks from its parent.
@@ -15,16 +13,16 @@ class ItemsScreen extends StatefulWidget {
   final List<ItemModel> items;
   final List<HistoryEntry> dummyHistory;
   final List<Issue> dummyIssues;
-  final VoidCallback onScan;
-  final Function(ItemModel) onAdd;
+  final Function(ItemModel) onUpdateItem;
+  final Function(ItemModel) navigateToItemDetails;
 
   const ItemsScreen({
     super.key,
     required this.items,
     required this.dummyHistory,
     required this.dummyIssues,
-    required this.onScan,
-    required this.onAdd,
+    required this.onUpdateItem,
+    required this.navigateToItemDetails,
   });
 
   @override
@@ -33,16 +31,8 @@ class ItemsScreen extends StatefulWidget {
 
 class _ItemsScreenState extends State<ItemsScreen> {
   Future<void> _handleScan() async {
-    String barcodeScanRes = await FlutterBarcodeScanner.scanBarcode(
-        "#ff6666", "Cancel", true, ScanMode.QR);
-
-    if (barcodeScanRes != '-1') {
-      _showScannedDialog(barcodeScanRes);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Scan cancelled')),
-      );
-    }
+    // This scan logic is now handled by the parent RootScreen,
+    // so we can keep the action button but remove the internal logic.
   }
 
   void _showScannedDialog(String barcode) {
@@ -51,7 +41,8 @@ class _ItemsScreenState extends State<ItemsScreen> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('QR Code Scanned'),
-          content: Text('The scanned QR code is: $barcode'),
+          content: Text(
+              'The scanned QR code is: $barcode. It is not yet tagged to an item.'),
           actions: <Widget>[
             TextButton(
               child: const Text('OK'),
@@ -69,7 +60,10 @@ class _ItemsScreenState extends State<ItemsScreen> {
   void _handleViewAll() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => FilteredItemsScreen(items: widget.items),
+        builder: (context) => FilteredItemsScreen(
+          items: widget.items,
+          onUpdateItem: widget.onUpdateItem,
+        ),
       ),
     );
   }
@@ -93,7 +87,8 @@ class _ItemsScreenState extends State<ItemsScreen> {
               itemType: ItemType.laptop, // Default icon
             );
 
-            widget.onAdd(newItem);
+            // This callback is now passed down from the parent
+            widget.onUpdateItem(newItem);
 
             Navigator.of(context).pop();
           },
@@ -124,9 +119,7 @@ class _ItemsScreenState extends State<ItemsScreen> {
                       allItems: widget.items,
                       recentHistory: widget.dummyHistory,
                       openIssues: widget.dummyIssues,
-                      onNavigateToItems: () {
-                        Navigator.of(context).pop();
-                      },
+                      onNavigateToItems: () => Navigator.of(context).pop(),
                     ),
                   ));
                 },
@@ -226,7 +219,9 @@ class _ItemsScreenState extends State<ItemsScreen> {
                   child: _buildActionButton(
                     icon: Icons.qr_code_scanner,
                     label: 'Scan',
-                    onTap: _handleScan,
+                    onTap: () {
+                      // This scan action is now handled by the FloatingActionButton in RootScreen
+                    },
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -290,69 +285,6 @@ class _ItemsScreenState extends State<ItemsScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: BottomAppBar(
-        color: Colors.white,
-        elevation: 0,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(Icons.home, 'Items', 0, onTap: () {}),
-            _buildNavItem(Icons.apps, 'Organise', 1, onTap: () {}),
-            _buildScanButton(),
-            _buildNavItem(Icons.warning_outlined, 'Alerts', 3, onTap: () {}),
-            _buildNavItem(Icons.menu, 'Menu', 4, onTap: _showMenu),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData icon, String label, int index,
-      {VoidCallback? onTap}) {
-    bool isSelected = index == 0;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 24,
-              color: isSelected ? Colors.black : Colors.grey[500],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: isSelected ? Colors.black : Colors.grey[500],
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScanButton() {
-    return GestureDetector(
-      onTap: _handleScan,
-      child: Container(
-        width: 50,
-        height: 50,
-        decoration: const BoxDecoration(
-          color: Colors.black,
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(
-          Icons.qr_code_scanner,
-          color: Colors.white,
-          size: 24,
-        ),
-      ),
     );
   }
 
@@ -391,11 +323,7 @@ class _ItemsScreenState extends State<ItemsScreen> {
   Widget _buildItemCard(ItemModel item) {
     return GestureDetector(
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => ItemDetailsScreen(item: item),
-          ),
-        );
+        widget.navigateToItemDetails(item);
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 15),

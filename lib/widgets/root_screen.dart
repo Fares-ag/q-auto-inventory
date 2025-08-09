@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter_application_1/widgets/items_screen.dart';
 import 'package:flutter_application_1/widgets/dashboard_screen.dart';
+import 'package:flutter_application_1/widgets/items_detail.dart';
 import 'package:flutter_application_1/widgets/item_model.dart';
 import 'package:flutter_application_1/widgets/issue_model.dart';
 import 'package:flutter_application_1/widgets/history_entry_model.dart';
-import 'dart:math';
 
 // This is the new root screen that manages the persistent bottom navigation.
 class RootScreen extends StatefulWidget {
@@ -51,6 +52,7 @@ class _RootScreenState extends State<RootScreen> {
       itemType: ItemType.furniture,
       isTagged: true,
       isSeenToday: true,
+      qrCodeId: "qr_12345",
     ),
     ItemModel(
       id: "21252568",
@@ -84,6 +86,7 @@ class _RootScreenState extends State<RootScreen> {
       itemType: ItemType.webcam,
       isSeenToday: true,
       isTagged: true,
+      qrCodeId: "qr_67890",
     ),
   ];
 
@@ -117,34 +120,78 @@ class _RootScreenState extends State<RootScreen> {
     });
   }
 
-  void _showMenu() {
-    showModalBottomSheet(
+  // Method to update an item in the main list
+  void _updateItem(ItemModel updatedItem) {
+    setState(() {
+      final index = dummyItems.indexWhere((item) => item.id == updatedItem.id);
+      if (index != -1) {
+        dummyItems[index] = updatedItem;
+      }
+    });
+  }
+
+  // The main scan function for the floating action button
+  Future<void> _handleScan() async {
+    String barcodeScanRes = await FlutterBarcodeScanner.scanBarcode(
+        "#ff6666", "Cancel", true, ScanMode.QR);
+
+    if (barcodeScanRes != '-1' && barcodeScanRes.isNotEmpty) {
+      final item = dummyItems.firstWhere(
+        (i) => i.qrCodeId == barcodeScanRes,
+        orElse: () => ItemModel(
+            id: '',
+            name: '',
+            category: '',
+            variants: '',
+            supplier: '',
+            company: '',
+            date: '',
+            itemType: ItemType.other),
+      );
+
+      if (item.id.isNotEmpty) {
+        // If an item is found, navigate to its details screen
+        _navigateToItemDetails(item);
+      } else {
+        // If no item is found, show a message
+        _showScannedDialog(barcodeScanRes);
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Scan cancelled')),
+      );
+    }
+  }
+
+  void _showScannedDialog(String barcode) {
+    showDialog(
       context: context,
       builder: (BuildContext context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              ListTile(
-                leading: const Icon(Icons.dashboard),
-                title: const Text('Dashboard'),
-                onTap: () {
-                  _onItemTapped(0);
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.inventory_2),
-                title: const Text('Items'),
-                onTap: () {
-                  _onItemTapped(1);
-                  Navigator.pop(context);
-                },
-              ),
-            ],
-          ),
+        return AlertDialog(
+          title: const Text('QR Code Scanned'),
+          content: Text(
+              'The scanned QR code is: $barcode. It is not yet tagged to an item.'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('OK'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
         );
       },
+    );
+  }
+
+  void _navigateToItemDetails(ItemModel item) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ItemDetailsScreen(
+          item: item,
+          onUpdateItem: _updateItem,
+        ),
+      ),
     );
   }
 
@@ -163,55 +210,51 @@ class _RootScreenState extends State<RootScreen> {
             allItems: dummyItems,
             recentHistory: dummyHistory,
             openIssues: dummyIssues,
-            onNavigateToItems: () {
-              _onItemTapped(1);
-            },
+            onNavigateToItems: () => _onItemTapped(1),
           ),
           ItemsScreen(
             items: dummyItems,
             dummyHistory: dummyHistory,
             dummyIssues: dummyIssues,
-            onScan: () {
-              // This is a placeholder for the scan action
-              print('Scan action triggered from RootScreen');
-            },
-            onAdd: (newItem) {
-              setState(() {
-                dummyItems.add(newItem);
-              });
-            },
+            onUpdateItem: _updateItem,
+            navigateToItemDetails: _navigateToItemDetails,
           ),
         ],
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.black,
+        onPressed: _handleScan,
+        child: const Icon(Icons.qr_code_scanner, color: Colors.white),
+      ),
       bottomNavigationBar: BottomAppBar(
         color: Colors.white,
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 6.0,
         elevation: 0,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildNavItem(Icons.home, 'Items', 0,
-                onTap: () => _onItemTapped(0)),
-            _buildNavItem(Icons.apps, 'Organise', 1,
-                onTap: () {}), // Placeholder
-            _buildScanButton(),
-            _buildNavItem(Icons.warning_outlined, 'Alerts', 3,
-                onTap: () {}), // Placeholder
-            _buildNavItem(Icons.menu, 'Menu', 4, onTap: _showMenu),
+            _buildNavItem(0, 'Dashboard', Icons.dashboard_outlined),
+            _buildNavItem(1, 'Items', Icons.inventory_2_outlined),
+            const SizedBox(width: 48), // The space for the FAB
+            _buildNavItem(2, 'Alerts', Icons.warning_outlined),
+            _buildNavItem(3, 'Menu', Icons.menu),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, int index,
-      {VoidCallback? onTap}) {
+  Widget _buildNavItem(int index, String label, IconData icon) {
     bool isSelected = _selectedIndex == index;
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+      onTap: () => _onItemTapped(index),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
@@ -228,28 +271,6 @@ class _RootScreenState extends State<RootScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScanButton() {
-    return GestureDetector(
-      onTap: () {
-        // Placeholder for Scan action
-        print('Scan action triggered from RootScreen');
-      },
-      child: Container(
-        width: 50,
-        height: 50,
-        decoration: const BoxDecoration(
-          color: Colors.black,
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(
-          Icons.qr_code_scanner,
-          color: Colors.white,
-          size: 24,
         ),
       ),
     );
