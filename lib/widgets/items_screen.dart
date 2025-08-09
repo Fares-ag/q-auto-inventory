@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_application_1/widgets/add_item.dart';
 import 'package:flutter_application_1/widgets/item_model.dart';
 import 'package:flutter_application_1/widgets/filtered_items_screen.dart';
-import 'package:flutter_application_1/widgets/dashboard_screen.dart'; // New import
-import 'package:flutter_application_1/widgets/history_entry_model.dart'; // New import for dummy data
-import 'package:flutter_application_1/widgets/issue_model.dart'; // New import for dummy data
+import 'package:flutter_application_1/widgets/items_detail.dart';
+import 'package:flutter_application_1/widgets/history_entry_model.dart';
+import 'package:flutter_application_1/widgets/issue_model.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'dart:math';
 
-// This is now a self-contained screen that gets data and callbacks from its parent.
 class ItemsScreen extends StatefulWidget {
   final List<ItemModel> items;
   final List<HistoryEntry> dummyHistory;
@@ -30,33 +29,6 @@ class ItemsScreen extends StatefulWidget {
 }
 
 class _ItemsScreenState extends State<ItemsScreen> {
-  Future<void> _handleScan() async {
-    // This scan logic is now handled by the parent RootScreen,
-    // so we can keep the action button but remove the internal logic.
-  }
-
-  void _showScannedDialog(String barcode) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('QR Code Scanned'),
-          content: Text(
-              'The scanned QR code is: $barcode. It is not yet tagged to an item.'),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('OK'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // The 'View All' button now navigates to the new FilteredItemsScreen.
   void _handleViewAll() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -68,7 +40,6 @@ class _ItemsScreenState extends State<ItemsScreen> {
     );
   }
 
-  // A handler for the "Add" button that now adds the new item to the list.
   void _handleAdd() {
     showModalBottomSheet(
       context: context,
@@ -84,12 +55,9 @@ class _ItemsScreenState extends State<ItemsScreen> {
               supplier: 'Unknown',
               company: 'Unknown',
               date: 'Now',
-              itemType: ItemType.laptop, // Default icon
+              itemType: ItemType.laptop,
             );
-
-            // This callback is now passed down from the parent
             widget.onUpdateItem(newItem);
-
             Navigator.of(context).pop();
           },
           onClose: () {
@@ -100,190 +68,128 @@ class _ItemsScreenState extends State<ItemsScreen> {
     );
   }
 
-  // New method to show the menu modal.
-  void _showMenu() {
-    showModalBottomSheet(
-      context: context,
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              ListTile(
-                leading: const Icon(Icons.dashboard),
-                title: const Text('Dashboard'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (context) => DashboardScreen(
-                      allItems: widget.items,
-                      recentHistory: widget.dummyHistory,
-                      openIssues: widget.dummyIssues,
-                      onNavigateToItems: () => Navigator.of(context).pop(),
-                    ),
-                  ));
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.inventory_2),
-                title: const Text('Items'),
-                onTap: () {
-                  Navigator.pop(
-                      context); // Already on ItemsScreen, just close the modal
-                },
-              ),
-            ],
-          ),
-        );
-      },
+  // NOTE: This scan function is local to this page's buttons.
+  // The main FAB scan is handled in root_screen.dart.
+  void _handleScan() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => QRScannerPage(
+          onScan: (scannedCode) {
+            ItemModel? foundItem;
+            try {
+              foundItem = widget.items.firstWhere(
+                (item) => item.qrCodeId == scannedCode,
+              );
+            } catch (e) {
+              foundItem = null;
+            }
+
+            if (foundItem != null) {
+              widget.navigateToItemDetails(foundItem);
+            } else {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Item with this QR code not found.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          },
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        systemOverlayStyle: SystemUiOverlayStyle.dark,
-        title: Center(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
+    // REMOVED the Scaffold, AppBar, and bottomNavigationBar.
+    // Return only the body content.
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 20),
+            child: Text(
+              'Items',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+          ),
+          Row(
             children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(
-                  Icons.business,
-                  color: Colors.white,
-                  size: 20,
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.qr_code_scanner,
+                  label: 'Scan',
+                  onTap: _handleScan,
                 ),
               ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'كيو أوتو',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
-                    ),
-                  ),
-                  Text(
-                    'Q-AUTO',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.search,
+                  label: 'Search',
+                  onTap: _handleViewAll,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.add,
+                  label: 'Add',
+                  onTap: _handleAdd,
+                ),
               ),
             ],
           ),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-            height: 1,
-            color: Colors.grey[200],
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(bottom: 20),
-              child: Text(
-                'Items',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
+          const SizedBox(height: 30),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(16),
             ),
-            Row(
+            child: Column(
               children: [
-                Expanded(
-                  child: _buildActionButton(
-                    icon: Icons.qr_code_scanner,
-                    label: 'Scan',
-                    onTap: () {
-                      // This scan action is now handled by the FloatingActionButton in RootScreen
-                    },
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${widget.items.length} Items',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _handleViewAll,
+                      child: Text(
+                        'View All',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildActionButton(
-                    icon: Icons.search,
-                    label: 'Search',
-                    onTap: _handleViewAll,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildActionButton(
-                    icon: Icons.add,
-                    label: 'Add',
-                    onTap: _handleAdd,
-                  ),
-                ),
+                const SizedBox(height: 20),
+                ...widget.items
+                    .take(3)
+                    .map((item) => _buildItemCard(item))
+                    .toList(),
               ],
             ),
-            const SizedBox(height: 30),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '${widget.items.length} Items',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: _handleViewAll,
-                        child: Text(
-                          'View All',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  ...widget.items
-                      .take(3)
-                      .map((item) => _buildItemCard(item))
-                      .toList(),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -381,58 +287,7 @@ class _ItemsScreenState extends State<ItemsScreen> {
                       color: Colors.grey[500],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '#${item.id}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.supplier,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        item.company,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.access_time,
-                          size: 14, color: Colors.grey[500]),
-                      const SizedBox(width: 6),
-                      Text(
-                        item.date,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ),
+                  // Additional details can be added here if needed
                 ],
               ),
             ),
@@ -440,5 +295,25 @@ class _ItemsScreenState extends State<ItemsScreen> {
         ),
       ),
     );
+  }
+
+  Widget buildItemIcon(ItemType type) {
+    switch (type) {
+      case ItemType.laptop:
+        return const Icon(Icons.laptop_mac, size: 30, color: Colors.black87);
+      case ItemType.keyboard:
+        return const Icon(Icons.keyboard, size: 30, color: Colors.black87);
+      case ItemType.furniture:
+        return const Icon(Icons.chair, size: 30, color: Colors.brown);
+      case ItemType.monitor:
+        return const Icon(Icons.monitor, size: 30, color: Colors.black87);
+      case ItemType.tablet:
+        return const Icon(Icons.tablet_android,
+            size: 30, color: Colors.blueGrey);
+      case ItemType.webcam:
+        return const Icon(Icons.videocam, size: 30, color: Colors.grey);
+      default:
+        return const Icon(Icons.inventory, size: 30, color: Colors.black87);
+    }
   }
 }

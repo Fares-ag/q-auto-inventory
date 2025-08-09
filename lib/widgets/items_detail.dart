@@ -5,8 +5,8 @@ import 'package:flutter_application_1/widgets/checkout.dart';
 import 'package:flutter_application_1/widgets/raise_issue.dart';
 import 'package:flutter_application_1/widgets/issue_model.dart';
 import 'package:flutter_application_1/widgets/history_entry_model.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
+import 'package:image_picker/image_picker.dart'; // Add the missing import
+import 'package:mobile_scanner/mobile_scanner.dart'; // Import the scanner
 import 'dart:io';
 import 'dart:math';
 
@@ -240,6 +240,38 @@ class _AssignToUserWidgetState extends State<AssignToUserWidget> {
   }
 }
 
+// New widget to handle the mobile scanner view.
+class QRScannerPage extends StatefulWidget {
+  final Function(String) onScan;
+
+  const QRScannerPage({super.key, required this.onScan});
+
+  @override
+  State<QRScannerPage> createState() => _QRScannerPageState();
+}
+
+class _QRScannerPageState extends State<QRScannerPage> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Scan QR Code')),
+      body: MobileScanner(
+        controller: MobileScannerController(
+          detectionSpeed: DetectionSpeed.normal,
+        ),
+        onDetect: (capture) {
+          final List<Barcode> barcodes = capture.barcodes;
+          if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
+            final String qrCode = barcodes.first.rawValue!;
+            widget.onScan(qrCode);
+            Navigator.of(context).pop();
+          }
+        },
+      ),
+    );
+  }
+}
+
 class ItemDetailsScreen extends StatefulWidget {
   final ItemModel item;
   final Function(ItemModel) onUpdateItem;
@@ -287,18 +319,15 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
   List<Comment> comments = [];
   List<Attachment> attachments = [];
   List<Information> informationEntries = [];
-  final List<HistoryEntry> _historyItems = [];
+  List<HistoryEntry> _historyItems = [];
 
-  // State variable to hold the scanned QR code ID
   String? _taggedQrCode;
 
-  // Create an instance of ImagePicker
   final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    // Initialize the tagged QR code from the item data
     _taggedQrCode = widget.item.qrCodeId;
     _addHistoryEntry(
       title: 'Item Details Viewed',
@@ -344,7 +373,6 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
         );
         break;
       case 'Issues':
-        // The issue save logic is now in _handleRaiseIssue
         break;
       case 'Reminders':
         final name = _reminderNameController.text;
@@ -352,7 +380,6 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
         final time = _selectedTime;
         final repeat = _selectedRepeatOption;
 
-        // This is where you would save the reminder to a database or state
         print(
             'Saving Reminder: Name: $name, Date: $date, Time: $time, Repeat: $repeat');
         _addHistoryEntry(
@@ -365,7 +392,6 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
         _saveInformationEntry();
         break;
       default:
-      // No action needed for other sections
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -373,7 +399,6 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     );
   }
 
-  // New handler for saving information entries.
   void _saveInformationEntry() {
     final title = _informationTitleController.text.trim();
     final body = _informationBodyController.text.trim();
@@ -446,58 +471,26 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     }
   }
 
-  // New method to handle QR tagging
   Future<void> _handleTagging() async {
-    String barcodeScanRes = await FlutterBarcodeScanner.scanBarcode(
-        "#ff6666", "Cancel", true, ScanMode.QR);
+    // Navigate to a new screen with the scanner
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (context) => QRScannerPage(onScan: (qrCode) {
+              final updatedItem = widget.item.copyWith(
+                qrCodeId: qrCode,
+                isTagged: true,
+              );
+              widget.onUpdateItem(updatedItem);
 
-    if (barcodeScanRes != '-1' && barcodeScanRes.isNotEmpty) {
-      // Create a new item with the updated qrCodeId
-      final updatedItem = widget.item.copyWith(
-        qrCodeId: barcodeScanRes,
-        isTagged: true,
-      );
+              setState(() {
+                _taggedQrCode = qrCode;
+              });
 
-      // Call the callback to update the item in the parent list
-      widget.onUpdateItem(updatedItem);
-
-      setState(() {
-        _taggedQrCode = barcodeScanRes;
-      });
-
-      _addHistoryEntry(
-        title: 'Item Tagged',
-        description: 'Item was tagged with QR code: $barcodeScanRes',
-        icon: Icons.qr_code,
-      );
-    }
-  }
-
-  // New method to handle the "Assign to User" pop-up.
-  void _handleAssignToUser() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return AssignToUserWidget(
-          onSave: (newAssignment) {
-            _addHistoryEntry(
-              title: 'Item Assigned',
-              description:
-                  'Assigned to ${newAssignment.staffName} at ${newAssignment.location}.',
-              icon: Icons.person,
-            );
-            Navigator.of(context).pop();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Item assigned successfully!')),
-            );
-          },
-          onClose: () {
-            Navigator.of(context).pop();
-          },
-        );
-      },
-    );
+              _addHistoryEntry(
+                title: 'Item Tagged',
+                description: 'Item was tagged with QR code: $qrCode',
+                icon: Icons.qr_code,
+              );
+            })));
   }
 
   Future<void> _presentDatePicker() async {
@@ -526,6 +519,51 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
         _selectedTime = pickedTime;
       });
     }
+  }
+
+  // FIXED: Added the missing _handleAssignToUser method.
+  void _handleAssignToUser() {
+    _addHistoryEntry(
+      title: 'Assign Form Opened',
+      description: 'The assign to user form was opened.',
+      icon: Icons.person_add_alt_1,
+    );
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          builder: (_, controller) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                ),
+              ),
+              child: AssignToUserWidget(
+                onSave: (assignment) {
+                  _addHistoryEntry(
+                    title: 'Item Assigned',
+                    description:
+                        'Assigned to ${assignment.staffName} at ${assignment.location}.',
+                    icon: Icons.assignment_ind,
+                  );
+                },
+                onClose: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _handleCheckout() {
@@ -581,7 +619,6 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
           },
           onClose: () {
             Navigator.of(context).pop();
-            // Optionally, you can add this to the item's history or issues list
           },
         );
       },
@@ -868,7 +905,6 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
               ],
             ),
             const SizedBox(height: 24),
-            // New GestureDetector for "Assign to User"
             GestureDetector(
               onTap: _handleAssignToUser,
               child: Row(
@@ -945,11 +981,11 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _handleRaiseIssue,
+                      child: const Text('Add New Issue'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.black,
                         foregroundColor: Colors.white,
                       ),
-                      child: const Text('Add New Issue'),
                     ),
                   ),
                 ],
@@ -1147,11 +1183,11 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _saveComment,
+                      child: const Text('Add Comment'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.black,
                         foregroundColor: Colors.white,
                       ),
-                      child: const Text('Add Comment'),
                     ),
                   ),
                 ],
@@ -1189,13 +1225,13 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: widget.item.isTagged ? null : _handleTagging,
+                      child: Text(widget.item.isTagged
+                          ? 'Already Tagged'
+                          : 'Scan to Tag'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.black,
                         foregroundColor: Colors.white,
                       ),
-                      child: Text(widget.item.isTagged
-                          ? 'Already Tagged'
-                          : 'Scan to Tag'),
                     ),
                   ),
                 ],
@@ -1218,7 +1254,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _pickAttachment,
-                      child: const Text('Add Attachment'),
+                      child: Text('Add Attachment'),
                     ),
                   ),
                 ],
@@ -1393,7 +1429,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     );
   }
 
-  Widget _buildItemIcon(ItemType type) {
+  Widget buildItemIcon(ItemType type) {
     switch (type) {
       case ItemType.laptop:
         return Column(

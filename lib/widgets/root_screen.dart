@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
+// REMOVED: import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter_application_1/widgets/items_screen.dart';
 import 'package:flutter_application_1/widgets/dashboard_screen.dart';
-import 'package:flutter_application_1/widgets/items_detail.dart';
+import 'package:flutter_application_1/widgets/items_detail.dart'; // ADDED for QRScannerPage
 import 'package:flutter_application_1/widgets/item_model.dart';
 import 'package:flutter_application_1/widgets/issue_model.dart';
 import 'package:flutter_application_1/widgets/history_entry_model.dart';
+import 'dart:math';
 
-// This is the new root screen that manages the persistent bottom navigation.
 class RootScreen extends StatefulWidget {
   const RootScreen({super.key});
 
@@ -19,7 +19,7 @@ class _RootScreenState extends State<RootScreen> {
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
 
-  // Dummy data to pass to the screens
+  // Dummy data (remains the same)
   final List<ItemModel> dummyItems = [
     ItemModel(
       id: "21252565",
@@ -32,16 +32,6 @@ class _RootScreenState extends State<RootScreen> {
       itemType: ItemType.laptop,
     ),
     ItemModel(
-      id: "21252566",
-      name: "Mechanical Keyboard",
-      category: "Keyboard",
-      variants: "1 Variant",
-      supplier: "Gaming Keyboard",
-      company: "Tech Solutions",
-      date: "Mon 31 Jul 2025, 14:30",
-      itemType: ItemType.keyboard,
-    ),
-    ItemModel(
       id: "21252567",
       name: 'Office Chair',
       category: "Furniture",
@@ -51,29 +41,7 @@ class _RootScreenState extends State<RootScreen> {
       date: "Thu 3 Aug 2025, 11:00",
       itemType: ItemType.furniture,
       isTagged: true,
-      isSeenToday: true,
       qrCodeId: "qr_12345",
-    ),
-    ItemModel(
-      id: "21252568",
-      name: 'Monitor Stand',
-      category: "Accessory",
-      variants: "1 Variant",
-      supplier: "AmazonBasics",
-      company: "Tech Solutions",
-      date: "Wed 2 Aug 2025, 09:00",
-      itemType: ItemType.monitor,
-    ),
-    ItemModel(
-      id: "21252569",
-      name: 'Wacom Tablet',
-      category: "Tablet",
-      variants: "1 Variant",
-      supplier: "Wacom",
-      company: "Sawa Technologies",
-      date: "Fri 4 Aug 2025, 15:00",
-      itemType: ItemType.tablet,
-      isWrittenOff: true,
     ),
     ItemModel(
       id: "21252570",
@@ -84,23 +52,16 @@ class _RootScreenState extends State<RootScreen> {
       company: "Tech Solutions",
       date: "Fri 4 Aug 2025, 16:00",
       itemType: ItemType.webcam,
-      isSeenToday: true,
       isTagged: true,
       qrCodeId: "qr_67890",
     ),
   ];
-
   final List<HistoryEntry> dummyHistory = [
     HistoryEntry(
         title: 'Item Created',
         description: 'Macbook pro 13" added.',
         timestamp: DateTime.now().subtract(const Duration(minutes: 5))),
-    HistoryEntry(
-        title: 'Item Checked Out',
-        description: 'Webcam C920 checked out to Joe.',
-        timestamp: DateTime.now().subtract(const Duration(hours: 2))),
   ];
-
   final List<Issue> dummyIssues = [
     Issue(
         issueId: '1',
@@ -120,7 +81,6 @@ class _RootScreenState extends State<RootScreen> {
     });
   }
 
-  // Method to update an item in the main list
   void _updateItem(ItemModel updatedItem) {
     setState(() {
       final index = dummyItems.indexWhere((item) => item.id == updatedItem.id);
@@ -130,37 +90,32 @@ class _RootScreenState extends State<RootScreen> {
     });
   }
 
-  // The main scan function for the floating action button
-  Future<void> _handleScan() async {
-    String barcodeScanRes = await FlutterBarcodeScanner.scanBarcode(
-        "#ff6666", "Cancel", true, ScanMode.QR);
+  // UPDATED: Scan function now uses the consistent QRScannerPage
+  void _handleScan() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => QRScannerPage(
+          onScan: (scannedCode) {
+            ItemModel? foundItem;
+            try {
+              foundItem = dummyItems.firstWhere(
+                (item) => item.qrCodeId == scannedCode,
+              );
+            } catch (e) {
+              foundItem = null;
+            }
 
-    if (barcodeScanRes != '-1' && barcodeScanRes.isNotEmpty) {
-      final item = dummyItems.firstWhere(
-        (i) => i.qrCodeId == barcodeScanRes,
-        orElse: () => ItemModel(
-            id: '',
-            name: '',
-            category: '',
-            variants: '',
-            supplier: '',
-            company: '',
-            date: '',
-            itemType: ItemType.other),
-      );
-
-      if (item.id.isNotEmpty) {
-        // If an item is found, navigate to its details screen
-        _navigateToItemDetails(item);
-      } else {
-        // If no item is found, show a message
-        _showScannedDialog(barcodeScanRes);
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Scan cancelled')),
-      );
-    }
+            if (foundItem != null) {
+              _navigateToItemDetails(foundItem);
+            } else {
+              if (mounted) {
+                _showScannedDialog(scannedCode);
+              }
+            }
+          },
+        ),
+      ),
+    );
   }
 
   void _showScannedDialog(String barcode) {
@@ -205,6 +160,7 @@ class _RootScreenState extends State<RootScreen> {
             _selectedIndex = index;
           });
         },
+        // FIXED: Added placeholder screens to match the nav bar items
         children: [
           DashboardScreen(
             allItems: dummyItems,
@@ -219,12 +175,15 @@ class _RootScreenState extends State<RootScreen> {
             onUpdateItem: _updateItem,
             navigateToItemDetails: _navigateToItemDetails,
           ),
+          const Center(child: Text('Alerts Screen')), // Placeholder for Alerts
+          const Center(child: Text('Menu Screen')), // Placeholder for Menu
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.black,
         onPressed: _handleScan,
+        shape: const CircleBorder(),
         child: const Icon(Icons.qr_code_scanner, color: Colors.white),
       ),
       bottomNavigationBar: BottomAppBar(
@@ -250,8 +209,10 @@ class _RootScreenState extends State<RootScreen> {
     bool isSelected = _selectedIndex == index;
     return GestureDetector(
       onTap: () => _onItemTapped(index),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Container(
+        // Using container for a larger tap area
+        color: Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
