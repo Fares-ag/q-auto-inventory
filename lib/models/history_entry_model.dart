@@ -1,6 +1,7 @@
+// lib/widgets/history_entry_model.dart
+
 import 'package:flutter/material.dart';
 
-// This data model class defines the structure for a single history entry.
 class HistoryEntry {
   final String title;
   final String description;

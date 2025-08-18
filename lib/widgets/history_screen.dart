@@ -1,18 +1,18 @@
+// lib/widgets/history_screen.dart
+
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/widgets/history_entry_model.dart'; // Import the HistoryEntry model
+import 'package:flutter_application_1/services/local_data_store.dart';
+import 'package:flutter_application_1/models/history_entry_model.dart';
 
-// This screen displays the history of a specific item.
+/// Screen to display all historical actions or events in the app.
 class HistoryScreen extends StatelessWidget {
-  // It now takes a list of HistoryEntry objects in its constructor.
-  final List<HistoryEntry> history;
-
-  const HistoryScreen({
-    Key? key,
-    required this.history,
-  }) : super(key: key);
+  const HistoryScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    // Retrieve all history entries from LocalDataStore and reverse to show latest first
+    final historyEntries = LocalDataStore().history.reversed.toList();
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -21,55 +21,44 @@ class HistoryScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with close button
+              // Header row with title and close button
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'History',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
-                    ),
-                  ),
+                  const Text('History',
+                      style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black)),
                   Container(
                     decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      shape: BoxShape.circle,
-                    ),
+                        color: Colors.grey[100], shape: BoxShape.circle),
                     child: IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(
-                        Icons.close,
-                        color: Colors.grey,
-                        size: 24,
-                      ),
+                      onPressed: () =>
+                          Navigator.pop(context), // Close history screen
+                      icon: const Icon(Icons.close, color: Colors.grey),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 40),
-
-              // History entries
+              // Expanded list of history entries or empty state
               Expanded(
-                // Use a ListView.builder for efficient, dynamic list rendering.
-                child: ListView.builder(
-                  itemCount: history.length,
-                  itemBuilder: (context, index) {
-                    final entry = history[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 32.0),
-                      child: _buildHistoryEntry(
-                        title: entry.title,
-                        subtitle: entry.description,
-                        timestamp:
-                            '${entry.timestamp.day}/${entry.timestamp.month}/${entry.timestamp.year} at ${entry.timestamp.hour}:${entry.timestamp.minute}',
-                        icon: entry.icon,
+                child: historyEntries.isEmpty
+                    ? const Center(
+                        child: Text('No history entries found.'),
+                      )
+                    : ListView.builder(
+                        itemCount: historyEntries.length,
+                        itemBuilder: (context, index) {
+                          final entry = historyEntries[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 32.0),
+                            child: _buildHistoryEntry(
+                                entry), // Build each entry row
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),
@@ -78,58 +67,41 @@ class HistoryScreen extends StatelessWidget {
     );
   }
 
-  // A helper function to build each history entry card.
-  Widget _buildHistoryEntry({
-    required String title,
-    required String subtitle,
-    required String timestamp,
-    IconData? icon,
-  }) {
+  /// Widget to display a single history entry with icon, title, description, and timestamp
+  Widget _buildHistoryEntry(HistoryEntry entry) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Display the icon if provided.
-        if (icon != null) ...[
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, size: 24, color: Colors.blue),
-          ),
-          const SizedBox(width: 16),
-        ],
+        // Icon for the history entry
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+              color: Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+          child:
+              Icon(entry.icon ?? Icons.history, size: 24, color: Colors.blue),
+        ),
+        const SizedBox(width: 16),
+        // Textual details of the history entry
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black,
-                ),
-              ),
+              // Entry title
+              Text(entry.title,
+                  style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black)),
               const SizedBox(height: 8),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                  height: 1.3,
-                ),
-              ),
+              // Entry description
+              Text(entry.description,
+                  style: TextStyle(
+                      fontSize: 16, color: Colors.grey[600], height: 1.3)),
               const SizedBox(height: 8),
+              // Entry timestamp formatted as DD/MM/YYYY
               Text(
-                timestamp,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[500],
-                  height: 1.3,
-                ),
-              ),
+                  '${entry.timestamp.day}/${entry.timestamp.month}/${entry.timestamp.year}',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[500])),
             ],
           ),
         ),

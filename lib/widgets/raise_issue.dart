@@ -1,42 +1,27 @@
+// lib/widgets/raise_issue.dart
+
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/models/issue_model.dart';
+import 'package:flutter_application_1/services/local_data_store.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'dart:math';
-import 'package:flutter_application_1/widgets/issue_model.dart';
 
-// This widget is a form for users to raise an issue for an item.
-// It is designed to be shown as a modal bottom sheet.
 class RaiseIssueWidget extends StatefulWidget {
-  // A callback function to pass the saved data back to the parent widget.
-  final Function(Issue)? onSave;
-  // A callback function to close the modal.
+  final String itemId;
   final VoidCallback? onClose;
 
-  const RaiseIssueWidget({
-    Key? key,
-    this.onSave,
-    this.onClose,
-  }) : super(key: key);
+  const RaiseIssueWidget({Key? key, required this.itemId, this.onClose})
+      : super(key: key);
 
   @override
   State<RaiseIssueWidget> createState() => _RaiseIssueWidgetState();
 }
 
 class _RaiseIssueWidgetState extends State<RaiseIssueWidget> {
-  // GlobalKey for form validation.
   final _formKey = GlobalKey<FormState>();
-  // Controller for the issue description text field.
   final _descriptionController = TextEditingController();
 
-  // State variables for the form.
-  String _selectedPriority = 'None';
-  final List<String> _priorityOptions = [
-    'None',
-    'Low',
-    'Medium',
-    'High',
-    'Critical',
-  ];
+  IssuePriority _selectedPriority = IssuePriority.Medium;
   File? _selectedAttachment;
   final ImagePicker _picker = ImagePicker();
   bool _isLoading = false;
@@ -47,9 +32,9 @@ class _RaiseIssueWidgetState extends State<RaiseIssueWidget> {
     super.dispose();
   }
 
-  // This function handles picking an image for the optional attachment.
   Future<void> _pickAttachment() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.camera);
+    final XFile? image =
+        await _picker.pickImage(source: ImageSource.camera, imageQuality: 85);
     if (image != null) {
       setState(() {
         _selectedAttachment = File(image.path);
@@ -57,274 +42,142 @@ class _RaiseIssueWidgetState extends State<RaiseIssueWidget> {
     }
   }
 
-  // Function to simulate saving the issue report.
-  void _saveIssue() {
-    // Validate the form.
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+  void _saveIssue() async {
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() {
       _isLoading = true;
     });
 
-    // Create a unique issue ID.
-    final newIssueId = Random().nextInt(99999999).toString();
+    try {
+      final issueId = 'issue_${DateTime.now().millisecondsSinceEpoch}';
 
-    // Create the new Issue object.
-    final newIssue = Issue(
-      issueId: newIssueId,
-      description: _descriptionController.text.trim(),
-      priority: _selectedPriority,
-      attachment: _selectedAttachment,
-      createdAt: DateTime.now(),
-    );
+      final newIssue = Issue(
+        issueId: issueId,
+        itemId: widget.itemId,
+        description: _descriptionController.text.trim(),
+        priority: _selectedPriority,
+        reporterId: 'dummy_user_id',
+        attachmentUrl: _selectedAttachment?.path,
+        createdAt: DateTime.now(),
+      );
 
-    // Placeholder logic for saving.
-    print('Saving Issue Report:');
-    print('  ID: ${newIssue.issueId}');
-    print('  Description: ${newIssue.description}');
-    print('  Priority: ${newIssue.priority}');
-    print('  Attachment: ${newIssue.attachment != null ? 'Yes' : 'No'}');
-    print('  Reporter: ${newIssue.reporter}');
+      LocalDataStore().raiseIssue(newIssue);
 
-    // Simulate save delay.
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (widget.onSave != null) {
-        widget.onSave!(newIssue);
+      if (mounted) {
+        if (widget.onClose != null) widget.onClose!();
       }
-      setState(() {
-        _isLoading = false;
-      });
-      if (widget.onClose != null) {
-        widget.onClose!();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Failed to save issue: $e'),
+            backgroundColor: Colors.red));
       }
-    });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20), topRight: Radius.circular(20)),
+      ),
+      child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
-          child: SingleChildScrollView(
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header with title and close button.
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Raise Issue',
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Raise Issue',
                         style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: widget.onClose,
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.close,
-                            color: Colors.grey[600],
-                            size: 24,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-
-                  // Description box
-                  TextFormField(
-                    controller: _descriptionController,
-                    maxLines: 5,
-                    decoration: InputDecoration(
-                      hintText: 'Describe the issue...',
-                      hintStyle: TextStyle(color: Colors.grey[400]),
-                      border: OutlineInputBorder(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black)),
+                    IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: widget.onClose),
+                  ],
+                ),
+                const SizedBox(height: 30),
+                TextFormField(
+                  controller: _descriptionController,
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    hintText: 'Describe the issue...',
+                    fillColor: Colors.grey[50],
+                    filled: true,
+                    border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 16),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please provide a description of the issue.';
-                      }
-                      return null;
-                    },
+                        borderSide: BorderSide.none),
                   ),
-                  const SizedBox(height: 20),
-
-                  // Priority dropdown
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                    child: DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                      ),
-                      value: _selectedPriority,
-                      items: _priorityOptions.map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          _selectedPriority = newValue!;
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Optional attachment
-                  GestureDetector(
-                    onTap: _pickAttachment,
-                    child: Container(
-                      width: double.infinity,
-                      height: 200,
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.grey[300]!,
-                          width: 2,
-                          style: BorderStyle.solid,
-                        ),
+                  validator: (value) =>
+                      value!.isEmpty ? 'Please provide a description.' : null,
+                ),
+                const SizedBox(height: 20),
+                DropdownButtonFormField<IssuePriority>(
+                  value: _selectedPriority,
+                  decoration: InputDecoration(
+                    labelText: 'Priority',
+                    fillColor: Colors.grey[50],
+                    filled: true,
+                    border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: _selectedAttachment != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  Image.file(
-                                    _selectedAttachment!,
-                                    fit: BoxFit.cover,
-                                  ),
-                                  Positioned(
-                                    top: 8,
-                                    right: 8,
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          _selectedAttachment = null;
-                                        });
-                                      },
-                                      child: Container(
-                                        width: 32,
-                                        height: 32,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.black54,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.close,
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  width: 60,
-                                  height: 60,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[100],
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(
-                                    Icons.camera_alt_outlined,
-                                    size: 32,
-                                    color: Colors.grey[500],
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                const Text(
-                                  'Take a photo of the issue',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.black87,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Tap to add photo',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
+                        borderSide: BorderSide.none),
                   ),
-                  const SizedBox(height: 40),
-
-                  // Save button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _saveIssue,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        disabledBackgroundColor: Colors.grey[400],
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Text(
-                              'Save Issue',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                    ),
+                  items: IssuePriority.values.map((priority) {
+                    return DropdownMenuItem<IssuePriority>(
+                        value: priority, child: Text(priority.name));
+                  }).toList(),
+                  onChanged: (newValue) {
+                    if (newValue != null) {
+                      setState(() => _selectedPriority = newValue);
+                    }
+                  },
+                ),
+                const SizedBox(height: 20),
+                OutlinedButton.icon(
+                  onPressed: _pickAttachment,
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  label: const Text('Add Attachment'),
+                ),
+                if (_selectedAttachment != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10.0),
+                    child: Image.file(_selectedAttachment!, height: 100),
                   ),
-                ],
-              ),
+                const SizedBox(height: 40),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: _isLoading ? null : _saveIssue,
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text('Submit Issue',
+                            style:
+                                TextStyle(fontSize: 18, color: Colors.white)),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

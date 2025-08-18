@@ -1,94 +1,229 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/widgets/item_model.dart';
-import 'package:flutter_application_1/widgets/history_entry_model.dart';
-import 'package:flutter_application_1/widgets/issue_model.dart';
+import 'package:flutter_application_1/models/item_model.dart';
+import 'package:flutter_application_1/models/issue_model.dart';
+import 'package:flutter_application_1/models/history_entry_model.dart';
+import 'package:flutter_application_1/widgets/add_item.dart';
+import 'package:flutter_application_1/widgets/filtered_items_screen.dart';
+import 'package:flutter_application_1/widgets/approval_queue_screen.dart';
+import 'package:flutter_application_1/services/local_data_store.dart';
+import 'package:provider/provider.dart';
 
-// This is the new dashboard screen that provides a high-level overview.
+/// Main dashboard screen for operators.
+/// Displays key statistics, quick actions, and recent activity.
 class DashboardScreen extends StatelessWidget {
-  final List<ItemModel> allItems;
-  final List<HistoryEntry> recentHistory;
-  final List<Issue> openIssues;
-  final VoidCallback onNavigateToItems;
+  final List<ItemModel> allItems; // List of all items in the system
+  final List<Issue> openIssues; // List of currently open issues
+  final List<HistoryEntry> recentHistory; // Recent user activity entries
+  final VoidCallback onNavigateToItems; // Callback for navigating to item list
+  final Function(ItemModel) onUpdateItem; // Callback when an item is updated
 
   const DashboardScreen({
     Key? key,
     required this.allItems,
-    required this.recentHistory,
     required this.openIssues,
+    required this.recentHistory,
     required this.onNavigateToItems,
+    required this.onUpdateItem,
   }) : super(key: key);
 
-  // Helper function to build a stat card.
-  Widget _buildStatCard(BuildContext context, String title, String value,
-      IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 32),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-          ],
+  /// Opens the Add Item modal as a bottom sheet
+  void _showAddItemModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        maxChildSize: 0.9,
+        minChildSize: 0.5,
+        builder: (context, scrollController) => AddItemWidget(
+          onClose: () => Navigator.of(context).pop(), // Close modal
+          onSave: (newItem) {
+            // Save new item to local datastore and close modal
+            LocalDataStore().addItem(newItem);
+            Navigator.of(context).pop();
+          },
         ),
       ),
     );
   }
 
-  // Helper function to build a quick action button.
-  Widget _buildQuickActionButton(BuildContext context, String title,
-      IconData icon, Color color, VoidCallback onTap) {
+  /// Navigates to the approval queue screen
+  void _navigateToApprovalQueue(BuildContext context) {
+    final dataStore = Provider.of<LocalDataStore>(context, listen: false);
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (context) => ChangeNotifierProvider.value(
+        value: dataStore,
+        child: const ApprovalQueueScreen(),
+      ),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Count of items not yet tagged
+    final untaggedItems = allItems.where((item) => !item.isTagged).length;
+    final theme = Theme.of(context);
+    final dataStore = Provider.of<LocalDataStore>(context, listen: false);
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Main dashboard title
+              Text('Operator Dashboard',
+                  style: theme.textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 24),
+
+              // Section: Attention Required
+              _buildSectionTitle(theme, 'Attention Required'),
+              const SizedBox(height: 16),
+              GridView.count(
+                crossAxisCount: 2, // Two cards per row
+                shrinkWrap: true,
+                physics:
+                    const NeverScrollableScrollPhysics(), // Prevent scrolling inside GridView
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 1.8,
+                children: [
+                  // Individual stat cards
+                  _buildStatCard(theme, 'Assets Due Back', '3',
+                      Icons.assignment_return_outlined, Colors.orange),
+                  _buildStatCard(
+                      theme,
+                      'Assigned Issues',
+                      openIssues.length.toString(),
+                      Icons.report_problem_outlined,
+                      Colors.red),
+                  _buildStatCard(
+                      theme,
+                      'Untagged Items',
+                      untaggedItems.toString(),
+                      Icons.label_off_outlined,
+                      Colors.blue),
+                ],
+              ),
+              const SizedBox(height: 32),
+
+              // Section: Quick Actions
+              _buildSectionTitle(theme, 'Quick Actions'),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  // Quick action buttons
+                  _buildQuickAction(theme, 'Add Item', Icons.add_box_outlined,
+                      Colors.green, () => _showAddItemModal(context)),
+                  const SizedBox(width: 16),
+                  _buildQuickAction(
+                      theme,
+                      'View Pending',
+                      Icons.playlist_add_check_circle,
+                      Colors.purple,
+                      () => _navigateToApprovalQueue(context)),
+                  const SizedBox(width: 16),
+                  _buildQuickAction(theme, 'View All',
+                      Icons.inventory_2_outlined, Colors.blueGrey, () {
+                    // Navigate to FilteredItemsScreen
+                    Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => ChangeNotifierProvider.value(
+                            value: LocalDataStore(),
+                            child: FilteredItemsScreen(
+                                items: allItems, onUpdateItem: onUpdateItem))));
+                  }),
+                ],
+              ),
+              const SizedBox(height: 32),
+
+              // Section: Recent Activity
+              _buildSectionTitle(theme, 'My Recent Activity'),
+              const SizedBox(height: 16),
+              recentHistory.isEmpty
+                  ? const Center(
+                      child: Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Text('No recent activity.')))
+                  : Column(
+                      children: recentHistory
+                          .map((entry) => _buildHistoryEntryCard(theme, entry))
+                          .toList(),
+                    ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Builds a section title widget
+  Widget _buildSectionTitle(ThemeData theme, String title) {
+    return Text(title,
+        style:
+            theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600));
+  }
+
+  /// Builds a statistic card with icon, value, and title
+  Widget _buildStatCard(
+      ThemeData theme, String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: theme.shadowColor.withOpacity(0.05), blurRadius: 8)
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Icon(icon, color: color, size: 28),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(value,
+                  style: theme.textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(title,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: Colors.grey.shade800)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds a quick action card (tapable)
+  Widget _buildQuickAction(ThemeData theme, String title, IconData icon,
+      Color color, VoidCallback onTap) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 20),
           decoration: BoxDecoration(
-            color: Colors.grey[100],
+            color: theme.cardColor,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey[200]!),
+            boxShadow: [
+              BoxShadow(
+                  color: theme.shadowColor.withOpacity(0.05), blurRadius: 8)
+            ],
           ),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, color: color, size: 28),
               const SizedBox(height: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
-                ),
-              ),
+              Text(title,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -96,203 +231,20 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  // Helper function to build a history entry card.
-  Widget _buildHistoryEntryCard(HistoryEntry entry) {
-    return Container(
+  /// Builds a card for a single recent history entry
+  Widget _buildHistoryEntryCard(ThemeData theme, HistoryEntry entry) {
+    return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (entry.icon != null) ...[
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(entry.icon, size: 24, color: Colors.blue),
-            ),
-            const SizedBox(width: 16),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  entry.description,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${entry.timestamp.day}/${entry.timestamp.month}/${entry.timestamp.year} at ${entry.timestamp.hour}:${entry.timestamp.minute}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Helper function to build an issue card.
-  Widget _buildIssueCard(Issue issue) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Priority: ${issue.priority}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'Status: ${issue.status}',
-                style: TextStyle(
-                  color: Colors.green[700],
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(issue.description),
-          const SizedBox(height: 8),
-          Text(
-            'Issue ID: ${issue.issueId}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Reporter: ${issue.reporter}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Calculate dashboard metrics
-    final int totalItems = allItems.length;
-    final int taggedItems = allItems.where((item) => item.isTagged).length;
-    final int writtenOffItems =
-        allItems.where((item) => item.isWrittenOff).length;
-    final int issueCount = openIssues.length;
-
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        backgroundColor: Colors.grey[50],
-        elevation: 0,
-        title: const Text(
-          'Dashboard',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-          ),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Stat Cards
-              Row(
-                children: [
-                  _buildStatCard(context, 'Total Items', totalItems.toString(),
-                      Icons.inventory_2, Colors.purple),
-                  const SizedBox(width: 16),
-                  _buildStatCard(context, 'Tagged Items',
-                      taggedItems.toString(), Icons.label, Colors.blue),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  _buildStatCard(context, 'Open Issues', issueCount.toString(),
-                      Icons.warning, Colors.red),
-                  const SizedBox(width: 16),
-                  _buildStatCard(
-                      context,
-                      'Written Off',
-                      writtenOffItems.toString(),
-                      Icons.delete_forever,
-                      Colors.grey),
-                ],
-              ),
-              const SizedBox(height: 40),
-              // Recent Activity
-              const Text(
-                'Recent Activity',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Column(
-                children: recentHistory
-                    .take(3) // Display a limited number of recent activities
-                    .map((entry) => _buildHistoryEntryCard(entry))
-                    .toList(),
-              ),
-              const SizedBox(height: 40),
-              // Open Issues
-              const Text(
-                'Open Issues',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Column(
-                children:
-                    openIssues.map((issue) => _buildIssueCard(issue)).toList(),
-              ),
-            ],
-          ),
-        ),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: Icon(entry.icon ?? Icons.history, color: theme.primaryColor),
+        title: Text(entry.title,
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
+        subtitle: Text(entry.description, style: theme.textTheme.bodyMedium),
+        trailing: Text(
+            '${entry.timestamp.hour}:${entry.timestamp.minute.toString().padLeft(2, '0')}'),
       ),
     );
   }

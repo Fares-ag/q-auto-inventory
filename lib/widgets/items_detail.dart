@@ -1,116 +1,127 @@
+// lib/widgets/items_detail.dart
+
+// Import necessary packages from Flutter and other libraries.
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/widgets/item_model.dart';
-import 'package:flutter_application_1/widgets/history_screen.dart';
+import 'package:flutter_application_1/models/item_model.dart';
 import 'package:flutter_application_1/widgets/checkout.dart';
 import 'package:flutter_application_1/widgets/raise_issue.dart';
-import 'package:flutter_application_1/widgets/issue_model.dart';
-import 'package:flutter_application_1/widgets/history_entry_model.dart';
-import 'package:image_picker/image_picker.dart'; // Add the missing import
-import 'package:mobile_scanner/mobile_scanner.dart'; // Import the scanner
+import 'package:flutter_application_1/widgets/checkin_widget.dart';
+import 'package:flutter_application_1/models/issue_model.dart';
+import 'package:flutter_application_1/services/local_data_store.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'dart:io';
-import 'dart:math';
+import 'dart:typed_data';
+import 'package:flutter_application_1/models/maintenance_log.dart';
 
-// Data model for a single comment.
+/// Data model for a single maintenance log entry.
+class MaintenanceLog {
+  final String id;
+  final String itemId;
+  final String description;
+  final String vendor;
+  final double cost;
+  final DateTime maintenanceDate;
+
+  MaintenanceLog({
+    required this.id,
+    required this.itemId,
+    required this.description,
+    required this.vendor,
+    required this.cost,
+    required this.maintenanceDate,
+  });
+}
+
+/// Data model for a comment.
 class Comment {
   final String text;
   final String author;
   final DateTime timestamp;
-
-  Comment({
-    required this.text,
-    required this.author,
-    required this.timestamp,
-  });
+  Comment({required this.text, required this.author, required this.timestamp});
 }
 
-// Data model for a single attachment.
+/// Data model for an attachment, like a photo or document.
 class Attachment {
   final String name;
   final File file;
   final DateTime timestamp;
-
-  Attachment({
-    required this.name,
-    required this.file,
-    required this.timestamp,
-  });
+  Attachment({required this.name, required this.file, required this.timestamp});
 }
 
-// Data model for a single information entry.
+/// Data model for generic information entries.
 class Information {
   final String title;
   final String body;
   final DateTime timestamp;
-
-  Information({
-    required this.title,
-    required this.body,
-    required this.timestamp,
-  });
+  Information(
+      {required this.title, required this.body, required this.timestamp});
 }
 
-// Data model for an assignment.
+/// Data model for an assignment of an item to a user and location.
 class Assignment {
   final String staffName;
   final String location;
   final DateTime timestamp;
-
-  Assignment({
-    required this.staffName,
-    required this.location,
-    required this.timestamp,
-  });
+  Assignment(
+      {required this.staffName,
+      required this.location,
+      required this.timestamp});
 }
 
-// New widget for assigning an item to a user.
+/// A widget that provides a form for assigning an item to a user.
 class AssignToUserWidget extends StatefulWidget {
-  final Function(Assignment) onSave;
-  final VoidCallback onClose;
-
-  const AssignToUserWidget({
-    Key? key,
-    required this.onSave,
-    required this.onClose,
-  }) : super(key: key);
+  final Function(Assignment)
+      onSave; // Callback function when the form is saved.
+  final VoidCallback onClose; // Callback function to close the widget.
+  const AssignToUserWidget(
+      {Key? key, required this.onSave, required this.onClose})
+      : super(key: key);
 
   @override
   State<AssignToUserWidget> createState() => _AssignToUserWidgetState();
 }
 
 class _AssignToUserWidgetState extends State<AssignToUserWidget> {
-  final _formKey = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>(); // Key to manage the form's state.
   final _staffNameController = TextEditingController();
   final _locationController = TextEditingController();
-  bool _isLoading = false;
+  bool _isLoading = false; // Flag to show a loading indicator on save.
 
   @override
   void dispose() {
+    // Clean up controllers when the widget is removed from the widget tree.
     _staffNameController.dispose();
     _locationController.dispose();
     super.dispose();
   }
 
+  /// Validates the form and saves the new assignment.
   void _saveAssignment() {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    // Don't proceed if the form is not valid.
+    if (!_formKey.currentState!.validate()) return;
 
+    // Set loading state to true to show progress indicator.
     setState(() {
       _isLoading = true;
     });
 
+    // Create a new Assignment object from the form fields.
     final newAssignment = Assignment(
-      staffName: _staffNameController.text.trim(),
-      location: _locationController.text.trim(),
-      timestamp: DateTime.now(),
-    );
+        staffName: _staffNameController.text.trim(),
+        location: _locationController.text.trim(),
+        timestamp: DateTime.now());
 
+    // Simulate a network request delay.
     Future.delayed(const Duration(milliseconds: 500), () {
-      widget.onSave(newAssignment);
-      setState(() {
-        _isLoading = false;
-      });
-      widget.onClose();
+      widget.onSave(newAssignment); // Execute the save callback.
+      // Check if the widget is still mounted before updating state.
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+      widget.onClose(); // Close the assignment widget.
     });
   }
 
@@ -121,117 +132,47 @@ class _AssignToUserWidgetState extends State<AssignToUserWidget> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
-          child: SingleChildScrollView(
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Assign To User',
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Assign To User',
                         style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: widget.onClose,
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.close,
-                            color: Colors.grey[600],
-                            size: 24,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-                  TextFormField(
+                            fontSize: 28, fontWeight: FontWeight.bold)),
+                    IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: widget.onClose),
+                  ],
+                ),
+                const SizedBox(height: 30),
+                TextFormField(
                     controller: _staffNameController,
-                    decoration: InputDecoration(
-                      hintText: 'Staff Name',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 16),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter the staff name';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  TextFormField(
+                    decoration: const InputDecoration(labelText: 'Staff Name'),
+                    validator: (val) =>
+                        val!.isEmpty ? 'Please enter a name' : null),
+                const SizedBox(height: 20),
+                TextFormField(
                     controller: _locationController,
-                    decoration: InputDecoration(
-                      hintText: 'Location',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 16),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter the location';
-                      }
-                      return null;
-                    },
+                    decoration: const InputDecoration(labelText: 'Location'),
+                    validator: (val) =>
+                        val!.isEmpty ? 'Please enter a location' : null),
+                const SizedBox(height: 40),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    // Disable the button while loading.
+                    onPressed: _isLoading ? null : _saveAssignment,
+                    child: _isLoading
+                        ? const CircularProgressIndicator()
+                        : const Text('Save Assignment'),
                   ),
-                  const SizedBox(height: 40),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _saveAssignment,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        disabledBackgroundColor: Colors.grey[400],
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Text(
-                              'Save Assignment',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -240,10 +181,9 @@ class _AssignToUserWidgetState extends State<AssignToUserWidget> {
   }
 }
 
-// New widget to handle the mobile scanner view.
+/// A screen that uses the device camera to scan a QR code.
 class QRScannerPage extends StatefulWidget {
-  final Function(String) onScan;
-
+  final Function(String) onScan; // Callback with the scanned QR code value.
   const QRScannerPage({super.key, required this.onScan});
 
   @override
@@ -256,14 +196,14 @@ class _QRScannerPageState extends State<QRScannerPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Scan QR Code')),
       body: MobileScanner(
-        controller: MobileScannerController(
-          detectionSpeed: DetectionSpeed.normal,
-        ),
+        // This callback is triggered when a barcode is detected.
         onDetect: (capture) {
-          final List<Barcode> barcodes = capture.barcodes;
+          final barcodes = capture.barcodes;
+          // Ensure a barcode was detected and has a value.
           if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
-            final String qrCode = barcodes.first.rawValue!;
-            widget.onScan(qrCode);
+            // Pass the scanned value to the callback.
+            widget.onScan(barcodes.first.rawValue!);
+            // Pop the scanner page off the navigation stack.
             Navigator.of(context).pop();
           }
         },
@@ -272,9 +212,11 @@ class _QRScannerPageState extends State<QRScannerPage> {
   }
 }
 
+/// The main screen widget that displays all details for a specific item.
 class ItemDetailsScreen extends StatefulWidget {
-  final ItemModel item;
-  final Function(ItemModel) onUpdateItem;
+  final ItemModel item; // The item data to display.
+  final Function(ItemModel)
+      onUpdateItem; // Callback to update the item's state in the parent widget.
 
   const ItemDetailsScreen({
     Key? key,
@@ -287,305 +229,79 @@ class ItemDetailsScreen extends StatefulWidget {
 }
 
 class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
-  bool collectionsExpanded = false;
-  bool issuesExpanded = false;
-  bool remindersExpanded = false;
-  bool informationExpanded = false;
-  bool commentsExpanded = false;
+  // State variables to control the visibility of expandable sections.
+  bool detailsExpanded = true;
+  bool financialExpanded = false;
+  bool techSpecsExpanded = false;
   bool attachmentsExpanded = false;
   bool tagsExpanded = false;
-  bool historyExpanded = false;
+  bool issuesExpanded = false;
+  bool maintenanceExpanded = false;
+  bool sapDetailsExpanded = false;
+  bool vehicleDetailsExpanded = false;
 
-  final _collectionsController = TextEditingController();
-  final _issuesController = TextEditingController();
-  final _remindersController = TextEditingController();
-  final _informationTitleController = TextEditingController();
-  final _informationBodyController = TextEditingController();
-  final _commentController = TextEditingController();
+  // Instance of the local data store for persistence.
+  final LocalDataStore _dataStore = LocalDataStore();
 
-  final _reminderNameController = TextEditingController();
-  DateTime? _selectedDate;
-  TimeOfDay? _selectedTime;
-  String _selectedRepeatOption = 'Never';
-  final List<String> _repeatOptions = [
-    'Never',
-    'Daily',
-    'Weekly',
-    'Bi-weekly',
-    'Monthly',
-  ];
-
+  // Lists to hold dynamic data for the item.
   List<Issue> reportedIssues = [];
-  List<Comment> comments = [];
   List<Attachment> attachments = [];
-  List<Information> informationEntries = [];
-  List<HistoryEntry> _historyItems = [];
+  final ImagePicker _picker = ImagePicker(); // Instance for picking images.
 
-  String? _taggedQrCode;
-
-  final ImagePicker _picker = ImagePicker();
-
-  @override
-  void initState() {
-    super.initState();
-    _taggedQrCode = widget.item.qrCodeId;
-    _addHistoryEntry(
-      title: 'Item Details Viewed',
-      description: 'You are now viewing this item\'s details.',
-      icon: Icons.visibility,
-    );
-  }
-
-  @override
-  void dispose() {
-    _collectionsController.dispose();
-    _issuesController.dispose();
-    _remindersController.dispose();
-    _informationTitleController.dispose();
-    _informationBodyController.dispose();
-    _reminderNameController.dispose();
-    _commentController.dispose();
-    super.dispose();
-  }
-
-  void _addHistoryEntry(
-      {required String title, required String description, IconData? icon}) {
-    setState(() {
-      _historyItems.add(
-        HistoryEntry(
-          title: title,
-          description: description,
-          timestamp: DateTime.now(),
-          icon: icon,
-        ),
-      );
-    });
-  }
-
-  void _saveInformation(String section) {
-    switch (section) {
-      case 'Collections':
-        final data = _collectionsController.text;
-        _addHistoryEntry(
-          title: 'Collection Added',
-          description: 'Added "$data" to collections.',
-          icon: Icons.folder_open,
-        );
-        break;
-      case 'Issues':
-        break;
-      case 'Reminders':
-        final name = _reminderNameController.text;
-        final date = _selectedDate;
-        final time = _selectedTime;
-        final repeat = _selectedRepeatOption;
-
-        print(
-            'Saving Reminder: Name: $name, Date: $date, Time: $time, Repeat: $repeat');
-        _addHistoryEntry(
-          title: 'Reminder Saved',
-          description: 'Set a reminder for "$name" to repeat $repeat.',
-          icon: Icons.access_time,
-        );
-        break;
-      case 'Information':
-        _saveInformationEntry();
-        break;
-      default:
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$section saved successfully!')),
-    );
-  }
-
-  void _saveInformationEntry() {
-    final title = _informationTitleController.text.trim();
-    final body = _informationBodyController.text.trim();
-
-    if (title.isNotEmpty || body.isNotEmpty) {
-      final newInformation = Information(
-        title: title.isEmpty ? 'Untitled' : title,
-        body: body,
-        timestamp: DateTime.now(),
-      );
-      setState(() {
-        informationEntries.add(newInformation);
-      });
-      _addHistoryEntry(
-        title: 'Information Updated',
-        description: 'Added a new information entry: "${newInformation.title}"',
-        icon: Icons.info_outline,
-      );
-      _informationTitleController.clear();
-      _informationBodyController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Information saved successfully!')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please enter a title or body for the information.')),
-      );
-    }
-  }
-
-  void _saveComment() {
-    if (_commentController.text.isNotEmpty) {
-      final newComment = Comment(
-        text: _commentController.text,
-        author: 'Charlotte',
-        timestamp: DateTime.now(),
-      );
-      setState(() {
-        comments.add(newComment);
-      });
-      _addHistoryEntry(
-        title: 'New Comment Added',
-        description: 'Added a new comment: "${_commentController.text}"',
-        icon: Icons.comment,
-      );
-      _commentController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Comment saved successfully!')),
-      );
-    }
-  }
-
-  void _pickAttachment() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.camera);
-    if (image != null) {
-      final newAttachment = Attachment(
-        name: 'Attachment ${attachments.length + 1}',
-        file: File(image.path),
-        timestamp: DateTime.now(),
-      );
-      setState(() {
-        attachments.add(newAttachment);
-      });
-      _addHistoryEntry(
-        title: 'New Attachment Added',
-        description: 'Added a new attachment via camera.',
-        icon: Icons.attachment,
-      );
-    }
-  }
-
-  Future<void> _handleTagging() async {
-    // Navigate to a new screen with the scanner
+  /// Navigates to the QR scanner page and updates the item with the scanned code.
+  void _handleTagging() {
     Navigator.of(context).push(MaterialPageRoute(
-        builder: (context) => QRScannerPage(onScan: (qrCode) {
-              final updatedItem = widget.item.copyWith(
-                qrCodeId: qrCode,
-                isTagged: true,
-              );
-              widget.onUpdateItem(updatedItem);
-
-              setState(() {
-                _taggedQrCode = qrCode;
-              });
-
-              _addHistoryEntry(
-                title: 'Item Tagged',
-                description: 'Item was tagged with QR code: $qrCode',
-                icon: Icons.qr_code,
-              );
-            })));
+      builder: (context) => QRScannerPage(onScan: (qrCode) {
+        // Create an updated item with the new QR code.
+        final updatedItem =
+            widget.item.copyWith(qrCodeId: qrCode, isTagged: true);
+        // Call the parent widget's update function.
+        widget.onUpdateItem(updatedItem);
+        // Pop the current context (the QR Scanner page).
+        Navigator.of(context).pop();
+      }),
+    ));
   }
 
-  Future<void> _presentDatePicker() async {
-    final now = DateTime.now();
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? now,
-      firstDate: now,
-      lastDate: DateTime(2100),
-    );
-    if (pickedDate != null) {
-      setState(() {
-        _selectedDate = pickedDate;
-      });
-    }
-  }
-
-  Future<void> _presentTimePicker() async {
-    final now = TimeOfDay.now();
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime ?? now,
-    );
-    if (pickedTime != null) {
-      setState(() {
-        _selectedTime = pickedTime;
-      });
-    }
-  }
-
-  // FIXED: Added the missing _handleAssignToUser method.
-  void _handleAssignToUser() {
-    _addHistoryEntry(
-      title: 'Assign Form Opened',
-      description: 'The assign to user form was opened.',
-      icon: Icons.person_add_alt_1,
-    );
+  /// Shows a modal bottom sheet to raise a new issue for the item.
+  void _handleRaiseIssue() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          builder: (_, controller) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                ),
-              ),
-              child: AssignToUserWidget(
-                onSave: (assignment) {
-                  _addHistoryEntry(
-                    title: 'Item Assigned',
-                    description:
-                        'Assigned to ${assignment.staffName} at ${assignment.location}.',
-                    icon: Icons.assignment_ind,
-                  );
-                },
-                onClose: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-            );
-          },
+          initialChildSize: 0.8,
+          maxChildSize: 0.8,
+          minChildSize: 0.5,
+          builder: (_, controller) => RaiseIssueWidget(
+            itemId: widget.item.id,
+            onClose: () => Navigator.of(context).pop(),
+          ),
         );
       },
     );
   }
 
+  /// Shows a modal bottom sheet for checking out the item.
   void _handleCheckout() {
-    _addHistoryEntry(
-      title: 'Checkout Form Opened',
-      description: 'The checkout form for this item was opened.',
-      icon: Icons.shopping_cart,
-    );
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return CheckoutWidget(
-          onSave: () {
-            print('Checkout process completed for item: ${widget.item.name}');
-            _addHistoryEntry(
-              title: 'Item Checked Out',
-              description: 'The item was successfully checked out to a user.',
-              icon: Icons.check,
+          onClose: () => Navigator.of(context).pop(),
+          onSave: (assignTo, assigneeSignature, operatorSignature) async {
+            // Persist the checkout action.
+            _dataStore.checkoutItem(widget.item.id, assignTo);
+            // Create an updated item model with the new state.
+            final updatedItem = widget.item.copyWith(
+              assignedStaff: assignTo,
+              isAvailable: false,
             );
-          },
-          onClose: () {
+            // Update the parent widget's state.
+            widget.onUpdateItem(updatedItem);
             Navigator.of(context).pop();
           },
         );
@@ -593,255 +309,166 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     );
   }
 
-  void _handleRaiseIssue() {
-    _addHistoryEntry(
-      title: 'Raise Issue Form Opened',
-      description: 'The raise issue form for this item was opened.',
-      icon: Icons.report_problem_outlined,
-    );
+  /// Shows a modal bottom sheet for checking in the item.
+  void _handleCheckin() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        return RaiseIssueWidget(
-          onSave: (newIssue) {
-            setState(() {
-              reportedIssues.add(newIssue);
-            });
-            _addHistoryEntry(
-              title: 'New Issue Reported',
-              description:
-                  'Priority: ${newIssue.priority} - ${newIssue.description}',
-              icon: Icons.warning_amber,
+        return CheckinWidget(
+          onClose: () => Navigator.of(context).pop(),
+          onSave: ({
+            required isWriteOff,
+            required condition,
+            required assignedStaff,
+            required attachment,
+            required staffSignature,
+            required operatorSignature,
+          }) async {
+            // Persist the check-in action.
+            _dataStore.checkinItem(widget.item.id);
+            // Create an updated item model.
+            final updatedItem = widget.item.copyWith(
+              isAvailable: !isWriteOff,
+              assignedStaff: null,
+              isWrittenOff: isWriteOff,
             );
-            print('Issue reported for item: ${widget.item.name}');
-            print('Current issues: ${reportedIssues.length}');
-          },
-          onClose: () {
+            // Update the parent widget's state.
+            widget.onUpdateItem(updatedItem);
             Navigator.of(context).pop();
+          },
+          assignedStaff: widget.item.assignedStaff,
+        );
+      },
+    );
+  }
+
+  /// Shows a date picker to schedule the next maintenance date.
+  void _handleScheduleMaintenance() async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: widget.item.nextMaintenanceDate ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2101),
+    );
+    if (pickedDate != null) {
+      // If a date was picked, update the item.
+      final updatedItem = widget.item.copyWith(nextMaintenanceDate: pickedDate);
+      _dataStore.updateItem(updatedItem);
+      widget.onUpdateItem(updatedItem);
+    }
+  }
+
+  /// Shows a dialog to log a new maintenance event.
+  void _logMaintenanceEvent(BuildContext context) {
+    final formKey = GlobalKey<FormState>();
+    final descriptionController = TextEditingController();
+    final vendorController = TextEditingController();
+    final costController = TextEditingController();
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Log Maintenance Event'),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: descriptionController,
+                      decoration:
+                          const InputDecoration(labelText: 'Description'),
+                      validator: (value) => value!.isEmpty ? 'Required' : null,
+                    ),
+                    TextFormField(
+                      controller: vendorController,
+                      decoration: const InputDecoration(labelText: 'Vendor'),
+                      validator: (value) => value!.isEmpty ? 'Required' : null,
+                    ),
+                    TextFormField(
+                      controller: costController,
+                      decoration: const InputDecoration(
+                          labelText: 'Cost (e.g., 100.00)'),
+                      keyboardType: TextInputType.number,
+                      validator: (value) => double.tryParse(value!) == null
+                          ? 'Invalid number'
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
+                    setDialogState(() => isLoading = true);
+                    try {
+                      final newLog = MaintenanceLog(
+                        id: 'log_${DateTime.now().millisecondsSinceEpoch}',
+                        itemId: widget.item.id,
+                        description: descriptionController.text.trim(),
+                        vendor: vendorController.text.trim(),
+                        cost: double.parse(costController.text.trim()),
+                        maintenanceDate: DateTime.now(),
+                      );
+                      // TODO: Persist the newLog object.
+                      print('Maintenance Logged: ${newLog.description}');
+
+                      // Update the item's last maintenance date.
+                      widget.onUpdateItem(widget.item
+                          .copyWith(lastMaintenanceDate: DateTime.now()));
+                      Navigator.of(context).pop();
+                    } catch (e) {
+                      setDialogState(() => isLoading = false);
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text(e.toString())));
+                    }
+                  },
+                  child: isLoading
+                      ? const CircularProgressIndicator()
+                      : const Text('Log Event'),
+                ),
+              ],
+            );
           },
         );
       },
     );
   }
 
-  Widget _buildIssueCard(Issue issue) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Priority: ${issue.priority}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'Status: ${issue.status}',
-                style: TextStyle(
-                  color: Colors.green[700],
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
+  /// Uses the image picker to take a photo with the camera and add it as an attachment.
+  void _pickAttachment() async {
+    final XFile? image =
+        await _picker.pickImage(source: ImageSource.camera, imageQuality: 85);
+    if (image != null) {
+      // If an image was captured, add it to the attachments list.
+      setState(() {
+        attachments.add(
+          Attachment(
+            name: 'Photo_${DateTime.now().millisecondsSinceEpoch}.jpg',
+            file: File(image.path),
+            timestamp: DateTime.now(),
           ),
-          const SizedBox(height: 8),
-          Text(issue.description),
-          const SizedBox(height: 8),
-          Text(
-            'Issue ID: ${issue.issueId}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Reporter: ${issue.reporter}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInformationCard(Information info) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            info.title,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (info.body.isNotEmpty)
-            Text(
-              info.body,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
-            ),
-          const SizedBox(height: 8),
-          Text(
-            'Saved on ${info.timestamp.day}/${info.timestamp.month}/${info.timestamp.year} at ${info.timestamp.hour}:${info.timestamp.minute}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHistoryEntryCard(HistoryEntry entry) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (entry.icon != null) ...[
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(entry.icon, size: 24, color: Colors.blue),
-            ),
-            const SizedBox(width: 16),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  entry.description,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${entry.timestamp.day}/${entry.timestamp.month}/${entry.timestamp.year} at ${entry.timestamp.hour}:${entry.timestamp.minute}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCommentCard(Comment comment) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            comment.text,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.black,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'By ${comment.author} on ${comment.timestamp.day}/${comment.timestamp.month}/${comment.timestamp.year} at ${comment.timestamp.hour}:${comment.timestamp.minute}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAttachmentCard(Attachment attachment) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.insert_photo_outlined, color: Colors.grey, size: 24),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  attachment.name,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  'Added on ${attachment.timestamp.day}/${attachment.timestamp.month}/${attachment.timestamp.year}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.download, color: Colors.blue),
-            onPressed: () {
-              // Add download logic here.
-            },
-          ),
-        ],
-      ),
-    );
+        );
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Check if the item is a vehicle to conditionally show vehicle details.
+    bool isVehicle = widget.item.assetClassDesc == 'Company Vehicle (Own Used)';
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -857,427 +484,167 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // --- Header Section ---
             Row(
               children: [
                 Container(
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.grey[300],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Center(child: buildItemIcon(widget.item.itemType)),
-                  ),
+                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.grey[300]),
+                  child: Center(child: buildItemIcon(widget.item.itemType)),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        widget.item.category,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      Text(widget.item.name,
+                          style: const TextStyle(
+                              fontSize: 24, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      Text(
-                        widget.item.name,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '#${widget.item.id}',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey[600],
-                        ),
-                      ),
+                      Text(widget.item.category,
+                          style:
+                              TextStyle(fontSize: 16, color: Colors.grey[600])),
                     ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
-            GestureDetector(
-              onTap: _handleAssignToUser,
-              child: Row(
-                children: [
-                  Icon(Icons.person_outline, color: Colors.grey[600]),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Assign To User',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[600],
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
+            // --- Action Buttons Section ---
             Row(
               children: [
-                Expanded(
-                  child: _buildActionButton(
-                    icon: Icons.shopping_cart_checkout_outlined,
-                    text: 'Checkout',
-                    onPressed: _handleCheckout,
-                  ),
-                ),
+                // Conditionally show 'Checkout' or 'Check In' button.
+                if (widget.item.isAvailable)
+                  Expanded(
+                      child: _buildActionButton(
+                          icon: Icons.shopping_cart_checkout_outlined,
+                          text: 'Checkout',
+                          onPressed: _handleCheckout))
+                else
+                  Expanded(
+                      child: _buildActionButton(
+                          icon: Icons.assignment_return_outlined,
+                          text: 'Check In',
+                          onPressed: _handleCheckin)),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _buildActionButton(
-                    icon: Icons.report_problem_outlined,
-                    text: 'Raise Issue',
-                    onPressed: _handleRaiseIssue,
-                  ),
-                ),
+                    child: _buildActionButton(
+                        icon: Icons.report_problem_outlined,
+                        text: 'Raise Issue',
+                        onPressed: _handleRaiseIssue)),
               ],
             ),
             const SizedBox(height: 24),
+            // --- Expandable Details Sections ---
             _buildExpandableSection(
-              title: 'Collections',
-              subtitle: 'Categorize and organize the things that matter to you',
-              isExpanded: collectionsExpanded,
+              title: 'Status & Location',
+              subtitle: 'Current status, condition, and assignment',
+              isExpanded: detailsExpanded,
+              onTap: () => setState(() => detailsExpanded = !detailsExpanded),
+              expandedContent: _buildDetailsGrid(),
+            ),
+            _buildExpandableSection(
+              title: 'Purchase Details',
+              subtitle: 'Supplier and purchase information',
+              isExpanded: financialExpanded,
               onTap: () =>
-                  setState(() => collectionsExpanded = !collectionsExpanded),
-              hasSaveButton: true,
-              expandedContent: TextFormField(
-                controller: _collectionsController,
-                decoration: InputDecoration(
-                  hintText: 'Add a new collection',
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
+                  setState(() => financialExpanded = !financialExpanded),
+              expandedContent: _buildFinancialGrid(),
             ),
             _buildExpandableSection(
-              title: 'Issues',
-              subtitle: 'Report and manage issues for this item here',
-              isExpanded: issuesExpanded,
-              onTap: () => setState(() => issuesExpanded = !issuesExpanded),
-              hasSaveButton: false,
-              expandedContent: Column(
-                children: [
-                  ...reportedIssues
-                      .map((issue) => _buildIssueCard(issue))
-                      .toList(),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _handleRaiseIssue,
-                      child: const Text('Add New Issue'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _buildExpandableSection(
-              title: 'Reminders',
-              subtitle: 'Remember everything with notifications',
-              isExpanded: remindersExpanded,
+              title: 'SAP Details',
+              subtitle: 'ERP and asset tracking data',
+              isExpanded: sapDetailsExpanded,
               onTap: () =>
-                  setState(() => remindersExpanded = !remindersExpanded),
-              hasSaveButton: true,
-              expandedContent: Column(
-                children: [
-                  TextFormField(
-                    controller: _reminderNameController,
-                    decoration: InputDecoration(
-                      hintText: 'Reminder Name',
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: _presentDatePicker,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 16, horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_today,
-                                    size: 20, color: Colors.blue),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _selectedDate == null
-                                      ? 'Select Date'
-                                      : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
-                                  style: const TextStyle(
-                                      fontSize: 16, color: Colors.black87),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: _presentTimePicker,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 16, horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.access_time,
-                                    size: 20, color: Colors.blue),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _selectedTime == null
-                                      ? 'Select Time'
-                                      : _selectedTime!.format(context),
-                                  style: const TextStyle(
-                                      fontSize: 16, color: Colors.black87),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                      ),
-                      value: _selectedRepeatOption,
-                      items: _repeatOptions.map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          _selectedRepeatOption = newValue!;
-                        });
-                      },
-                    ),
-                  ),
-                ],
-              ),
+                  setState(() => sapDetailsExpanded = !sapDetailsExpanded),
+              expandedContent: _buildSapDetailsGrid(),
             ),
+            // Conditionally render the Vehicle Details section.
+            if (isVehicle)
+              _buildExpandableSection(
+                title: 'Vehicle Details',
+                subtitle: 'Specific information for vehicles',
+                isExpanded: vehicleDetailsExpanded,
+                onTap: () => setState(
+                    () => vehicleDetailsExpanded = !vehicleDetailsExpanded),
+                expandedContent: _buildVehicleDetailsGrid(),
+              ),
             _buildExpandableSection(
-              title: 'Information',
-              subtitle: 'Keep all important information in one handy place',
-              isExpanded: informationExpanded,
+              title: 'Technical Specs',
+              subtitle: 'Model, serial number, and other identifiers',
+              isExpanded: techSpecsExpanded,
               onTap: () =>
-                  setState(() => informationExpanded = !informationExpanded),
-              hasSaveButton: true,
-              expandedContent: Column(
-                children: [
-                  // Display existing information entries
-                  ...informationEntries.reversed
-                      .map((info) => _buildInformationCard(info))
-                      .toList(),
-                  if (informationEntries.isNotEmpty) const SizedBox(height: 16),
-
-                  // New input fields for adding a new entry
-                  TextFormField(
-                    controller: _informationTitleController,
-                    decoration: InputDecoration(
-                      hintText: 'Information Title',
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _informationBodyController,
-                    maxLines: 5,
-                    decoration: InputDecoration(
-                      hintText: 'Enter additional information...',
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _buildExpandableSection(
-              title: 'Comments',
-              subtitle: 'Add and view comments on this item',
-              isExpanded: commentsExpanded,
-              onTap: () => setState(() => commentsExpanded = !commentsExpanded),
-              hasSaveButton: false,
-              expandedContent: Column(
-                children: [
-                  ...comments.reversed
-                      .map((comment) => _buildCommentCard(comment))
-                      .toList(),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _commentController,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: 'Write a new comment...',
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _saveComment,
-                      child: const Text('Add Comment'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _buildExpandableSection(
-              title: 'Tags',
-              subtitle: 'Tag your assets to easily identify',
-              isExpanded: tagsExpanded,
-              onTap: () => setState(() => tagsExpanded = !tagsExpanded),
-              hasSaveButton: false,
-              expandedContent: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_taggedQrCode != null)
-                    Text(
-                      'Tagged with QR Code: $_taggedQrCode',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[800],
-                      ),
-                    )
-                  else
-                    const Text(
-                      'This item is not yet tagged.',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.red,
-                      ),
-                    ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: widget.item.isTagged ? null : _handleTagging,
-                      child: Text(widget.item.isTagged
-                          ? 'Already Tagged'
-                          : 'Scan to Tag'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                  setState(() => techSpecsExpanded = !techSpecsExpanded),
+              expandedContent: _buildTechSpecsGrid(),
             ),
             _buildExpandableSection(
               title: 'Attachments',
-              subtitle: 'Add photos and documents to your item',
+              subtitle: 'View and add photos or documents',
               isExpanded: attachmentsExpanded,
               onTap: () =>
                   setState(() => attachmentsExpanded = !attachmentsExpanded),
-              hasSaveButton: false,
               expandedContent: Column(
                 children: [
+                  // Map the list of attachments to card widgets.
                   ...attachments
                       .map((attachment) => _buildAttachmentCard(attachment))
                       .toList(),
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
+                    child: ElevatedButton.icon(
                       onPressed: _pickAttachment,
-                      child: Text('Add Attachment'),
+                      icon: const Icon(Icons.add_a_photo_outlined),
+                      label: const Text('Add Photo'),
                     ),
                   ),
                 ],
               ),
             ),
             _buildExpandableSection(
-              title: 'History',
-              subtitle: 'Tag your assets to easily identify',
-              isExpanded: historyExpanded,
-              onTap: () {
-                if (!historyExpanded) {
-                  Navigator.of(context).push(MaterialPageRoute(
-                    fullscreenDialog: true,
-                    builder: (context) => HistoryScreen(history: _historyItems),
-                  ));
-                }
-                setState(() => historyExpanded = !historyExpanded);
-              },
-              hasSaveButton: false,
+              title: 'Maintenance',
+              subtitle: 'Schedule and track maintenance',
+              isExpanded: maintenanceExpanded,
+              onTap: () =>
+                  setState(() => maintenanceExpanded = !maintenanceExpanded),
+              expandedContent: _buildMaintenanceGrid(),
+            ),
+            _buildExpandableSection(
+              title: 'Tags',
+              subtitle: 'Manage QR code assignment for this item',
+              isExpanded: tagsExpanded,
+              onTap: () => setState(() => tagsExpanded = !tagsExpanded),
               expandedContent: Column(
-                children: _historyItems.reversed
-                    .map((entry) => _buildHistoryEntryCard(entry))
-                    .toList(),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.item.isTagged
+                        ? 'Tagged with QR Code:'
+                        : 'This item is not yet tagged.',
+                    style: TextStyle(fontSize: 16, color: Colors.grey[800]),
+                  ),
+                  if (widget.item.isTagged)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0, bottom: 16.0),
+                      child: Text(widget.item.qrCodeId ?? 'N/A',
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _handleTagging,
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: Text(widget.item.isTagged
+                          ? 'Scan to Re-Tag'
+                          : 'Scan to Tag'),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -1286,11 +653,194 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     );
   }
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required String text,
-    required VoidCallback onPressed,
-  }) {
+  /// Builds a grid to display the item's status and location details.
+  Widget _buildDetailsGrid() {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 3.5,
+      children: [
+        _buildDetailItem(
+            "Status", widget.item.isWrittenOff ? "Written Off" : "Active"),
+        _buildDetailItem("Department", widget.item.department ?? 'N/A'),
+        _buildDetailItem("Assigned To", widget.item.assignedStaff ?? 'N/A'),
+        _buildDetailItem("Available", widget.item.isAvailable ? "Yes" : "No"),
+      ],
+    );
+  }
+
+  /// Builds a grid to display SAP-related details.
+  Widget _buildSapDetailsGrid() {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 3.5,
+      children: [
+        _buildDetailItem("CoCD", widget.item.coCd ?? 'N/A'),
+        _buildDetailItem("Class", widget.item.sapClass ?? 'N/A'),
+        _buildDetailItem(
+            "Asset Class Desc", widget.item.assetClassDesc ?? 'N/A'),
+        _buildDetailItem("APC Acct", widget.item.apcAcct ?? 'N/A'),
+        _buildDetailItem("Vendor", widget.item.vendor ?? 'N/A'),
+        _buildDetailItem("Plnt", widget.item.plnt ?? 'N/A'),
+        _buildDetailItem("Asset Type", widget.item.assetType ?? 'N/A'),
+        _buildDetailItem("Owner", widget.item.owner ?? 'N/A'),
+      ],
+    );
+  }
+
+  /// Builds a grid to display vehicle-specific details.
+  Widget _buildVehicleDetailsGrid() {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 3.5,
+      children: [
+        _buildDetailItem("Vehicle ID No.", widget.item.vehicleIdNo ?? 'N/A'),
+        _buildDetailItem("LIC Plate", widget.item.licPlate ?? 'N/A'),
+        _buildDetailItem("Vehicle Model", widget.item.vehicleModel ?? 'N/A'),
+        _buildDetailItem("Model Code", widget.item.modelCode ?? 'N/A'),
+        _buildDetailItem("Model Description", widget.item.modelDesc ?? 'N/A'),
+        _buildDetailItem("Model Year", widget.item.modelYear ?? 'N/A'),
+      ],
+    );
+  }
+
+  /// Builds a grid to display financial details like purchase price and date.
+  Widget _buildFinancialGrid() {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 3.5,
+      children: [
+        _buildDetailItem("Purchase Date",
+            "${widget.item.purchaseDate.day}/${widget.item.purchaseDate.month}/${widget.item.purchaseDate.year}"),
+        _buildDetailItem("Supplier", widget.item.supplier),
+        _buildDetailItem("Purchase Price",
+            'QR ${widget.item.purchasePrice?.toStringAsFixed(2) ?? 'N/A'}'),
+        _buildDetailItem("Current Value",
+            'QR ${widget.item.currentValue?.toStringAsFixed(2) ?? 'N/A'}'),
+      ],
+    );
+  }
+
+  /// Builds the content for the maintenance section, including dates, actions, and history.
+  Widget _buildMaintenanceGrid() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 3.5,
+          children: [
+            _buildDetailItem(
+                "Last Maintenance",
+                widget.item.lastMaintenanceDate?.toString().split(' ')[0] ??
+                    'N/A'),
+            _buildDetailItem(
+                "Next Maintenance",
+                widget.item.nextMaintenanceDate?.toString().split(' ')[0] ??
+                    'N/A'),
+          ],
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _handleScheduleMaintenance,
+            icon: const Icon(Icons.calendar_month_outlined),
+            label: const Text('Schedule Next Maintenance'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _logMaintenanceEvent(context),
+            icon: const Icon(Icons.build_outlined),
+            label: const Text('Log Maintenance Event'),
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Maintenance History',
+          style: TextStyle(
+              fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
+        ),
+        const SizedBox(height: 16),
+        // Placeholder for maintenance history list.
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount:
+              0, // TODO: Replace with actual maintenance log list length.
+          itemBuilder: (context, index) {
+            // TODO: Build and return _buildMaintenanceCard(logList[index]).
+            return const SizedBox.shrink();
+          },
+        ),
+      ],
+    );
+  }
+
+  /// Builds a card widget to display a single maintenance log entry.
+  Widget _buildMaintenanceCard(MaintenanceLog log) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        leading: const Icon(Icons.build_circle_outlined, color: Colors.blue),
+        title: Text(log.description),
+        subtitle: Text(
+            'Cost: QR ${log.cost.toStringAsFixed(2)} | Vendor: ${log.vendor}'),
+        trailing: Text(log.maintenanceDate.toString().split(' ')[0]),
+      ),
+    );
+  }
+
+  /// Builds a grid to display technical specifications.
+  Widget _buildTechSpecsGrid() {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 3.5,
+      children: [
+        _buildDetailItem("Model Code", widget.item.modelCode ?? 'N/A'),
+        _buildDetailItem("Model Description", widget.item.modelDesc ?? 'N/A'),
+        _buildDetailItem("Model Year", widget.item.modelYear ?? 'N/A'),
+      ],
+    );
+  }
+
+  /// A reusable helper widget to display a label and a value.
+  Widget _buildDetailItem(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+          const SizedBox(height: 4),
+          Text(value,
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  /// A reusable helper widget for creating styled action buttons.
+  Widget _buildActionButton(
+      {required IconData icon,
+      required String text,
+      required VoidCallback onPressed}) {
     return Container(
       height: 48,
       decoration: BoxDecoration(
@@ -1308,14 +858,11 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
             children: [
               Icon(icon, size: 20, color: Colors.black87),
               const SizedBox(width: 8),
-              Text(
-                text,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
-                ),
-              ),
+              Text(text,
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black87)),
             ],
           ),
         ),
@@ -1323,14 +870,13 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     );
   }
 
-  Widget _buildExpandableSection({
-    required String title,
-    required String subtitle,
-    required bool isExpanded,
-    required VoidCallback onTap,
-    Widget? expandedContent,
-    bool hasSaveButton = false,
-  }) {
+  /// A reusable widget for creating a collapsible section.
+  Widget _buildExpandableSection(
+      {required String title,
+      required String subtitle,
+      required bool isExpanded,
+      required VoidCallback onTap,
+      Widget? expandedContent}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -1340,160 +886,92 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
       ),
       child: Column(
         children: [
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
+          InkWell(
+            onTap: onTap,
+            borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12), topRight: Radius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title,
                             style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            subtitle,
+                                fontSize: 18, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 4),
+                        Text(subtitle,
                             style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
+                                fontSize: 14, color: Colors.grey[600])),
+                      ],
                     ),
-                    Icon(
-                      isExpanded ? Icons.remove : Icons.add,
-                      color: Colors.black87,
-                    ),
-                  ],
-                ),
+                  ),
+                  // Show add or remove icon based on expanded state.
+                  Icon(isExpanded ? Icons.remove : Icons.add),
+                ],
               ),
             ),
           ),
-          if (isExpanded)
+          // If expanded, show the content.
+          if (isExpanded && expandedContent != null)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.grey[50],
                 borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(12),
-                  bottomRight: Radius.circular(12),
-                ),
+                    bottomLeft: Radius.circular(12),
+                    bottomRight: Radius.circular(12)),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  expandedContent ??
-                      Text(
-                        'Content for $title section would go here.',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
-                      ),
-                  if (hasSaveButton) ...[
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => _saveInformation(title),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text(
-                        'Save',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+              child: expandedContent,
             ),
         ],
       ),
     );
   }
 
-  Widget buildItemIcon(ItemType type) {
-    switch (type) {
-      case ItemType.laptop:
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 35,
-              height: 22,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Container(
-              width: 40,
-              height: 3,
-              decoration: BoxDecoration(
-                color: Colors.grey[600],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ],
-        );
-      case ItemType.keyboard:
-        return Container(
-          width: 35,
-          height: 25,
-          decoration: BoxDecoration(
-            color: Colors.grey[700],
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: GridView.builder(
-            padding: const EdgeInsets.all(4),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              childAspectRatio: 1,
-              crossAxisSpacing: 1,
-              mainAxisSpacing: 1,
-            ),
-            itemCount: 12,
-            itemBuilder: (context, index) => Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[800],
-                borderRadius: BorderRadius.circular(1),
-              ),
-            ),
-          ),
-        );
-      case ItemType.furniture:
-        return const Icon(Icons.chair, size: 40, color: Colors.brown);
-      case ItemType.monitor:
-        return const Icon(Icons.monitor, size: 40, color: Colors.black);
-      case ItemType.tablet:
-        return const Icon(Icons.tablet_android,
-            size: 40, color: Colors.blueGrey);
-      case ItemType.webcam:
-        return const Icon(Icons.videocam, size: 40, color: Colors.grey);
-      default:
-        return Icon(Icons.inventory, color: Colors.grey[600]);
-    }
+  /// Builds a card to display a single attachment.
+  Widget _buildAttachmentCard(Attachment attachment) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: ListTile(
+        leading: const Icon(Icons.image, color: Colors.blue),
+        title: Text(attachment.name),
+        subtitle: Text(
+            'Added on ${attachment.timestamp.day}/${attachment.timestamp.month}/${attachment.timestamp.year}'),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: () {
+          // TODO: Implement logic to view the attachment.
+        },
+      ),
+    );
   }
+}
+
+/// A helper function that returns an icon based on the item type.
+Widget buildItemIcon(ItemType type) {
+  IconData iconData;
+  Color color;
+  switch (type) {
+    case ItemType.laptop:
+      iconData = Icons.laptop_mac;
+      color = Colors.black87;
+      break;
+    case ItemType.keyboard:
+      iconData = Icons.keyboard;
+      color = Colors.black87;
+      break;
+    case ItemType.furniture:
+      iconData = Icons.chair;
+      color = Colors.brown;
+      break;
+    default:
+      iconData = Icons.inventory;
+      color = Colors.grey;
+  }
+  return Icon(iconData, size: 40, color: color);
 }

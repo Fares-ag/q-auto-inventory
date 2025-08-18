@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "938513065793",
+    "project_id": "q-auto-asset-manager",
+    "storage_bucket": "q-auto-asset-manager.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:938513065793:android:1ef73c8f63268fcf4723c0",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDh3d2K7rHBWR0zsgHPop6ouMrqbqMOYUw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

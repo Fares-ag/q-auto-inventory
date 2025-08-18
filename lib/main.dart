@@ -1,17 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_application_1/widgets/root_screen.dart'; // Import the new RootScreen
-// This is now a content screen
-// This is now a content screen
-// Keep imports for data models
+import 'package:flutter_application_1/widgets/login_screen.dart'; // New import
 
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+void main() async {
   runApp(const MyApp());
 }
 
-// The root widget of your application.
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -19,12 +12,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Q-AUTO Inventory',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.blue),
-        fontFamily: 'SF Pro Display',
-        useMaterial3: true,
-      ),
-      home: const RootScreen(), // The RootScreen is now the app's entry point
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+      home: const LoginScreen(),
       debugShowCheckedModeBanner: false,
     );
   }

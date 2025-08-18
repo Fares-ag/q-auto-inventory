@@ -30,6 +30,17 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  fl_chart: ^0.66.2
+  provider: ^6.0.0
+  firebase_messaging: ^14.6.8
+  flutter_signature_pad: 3.0.1
+  qr_flutter: ^4.1.0
+  firebase_core: ^2.32.0 # Corrected version
+  firebase_auth: ^4.20.0
+  cloud_firestore: ^4.17.5
+  firebase_storage: ^11.7.7
+  cloud_functions: ^4.7.5
   cupertino_icons: ^1.0.2
   image_picker: ^1.1.2
   flutter_barcode_scanner: ^2.0.0
