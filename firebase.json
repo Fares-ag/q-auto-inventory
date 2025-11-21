@@ -1,0 +1,25 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "qauto-dam",
+          "appId": "1:6001836083:android:399a01d88883bdf7c0e346",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "qauto-dam",
+          "configurations": {
+            "android": "1:6001836083:android:399a01d88883bdf7c0e346",
+            "ios": "1:6001836083:ios:61097f243aa71b97c0e346",
+            "macos": "1:6001836083:ios:61097f243aa71b97c0e346",
+            "web": "1:6001836083:web:420984e9517e32b1c0e346",
+            "windows": "1:6001836083:web:bcbc3c27c18f3d03c0e346"
+          }
+        }
+      }
+    }
+  }
+}

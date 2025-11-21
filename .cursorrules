@@ -1,0 +1,49 @@
+# Cursor Rules for Q Auto Inventory Project
+
+## Flutter Best Practices - MANDATORY
+
+**ALWAYS follow Flutter best practices in every code change:**
+
+1. **Resource Management**
+   - Dispose ALL controllers (TextEditingController, FocusNode, AnimationController, Timer, StreamSubscription)
+   - Always check `context.mounted` before using `context` after async operations
+   - Use `finally` blocks for cleanup
+
+2. **Type Safety**
+   - Use proper function types: `ValueChanged<T>`, `VoidCallback`, not `Function`
+   - Avoid `dynamic` - use proper types
+   - Use null safety properly
+
+3. **Performance**
+   - Use `const` constructors wherever possible
+   - Memoize expensive computations
+   - Use `const` for static values (colors, strings, lists)
+   - Optimize lookups (Maps for O(1) instead of O(n) firstWhere)
+
+4. **Error Handling**
+   - Always check `context.mounted` before using `context` after `await`
+   - Use try-catch-finally for proper cleanup
+   - Log errors with `debugPrint`
+   - Provide user-friendly error messages
+
+5. **Platform Compatibility**
+   - Use `Platform.pathSeparator` instead of hardcoded `/` or `\`
+   - Check platform when needed: `kIsWeb`, `Platform.isAndroid`, etc.
+
+6. **Code Quality**
+   - Use private members (`_private`) for internal state
+   - Follow naming conventions (PascalCase for classes, camelCase for variables)
+   - Keep widgets small and extract complex widgets
+   - Separate concerns (widgets, services, models)
+
+**Before any code change, verify:**
+- [ ] All controllers disposed
+- [ ] `context.mounted` checks in place
+- [ ] `const` constructors used
+- [ ] Proper error handling
+- [ ] Type safety maintained
+- [ ] Performance optimized
+- [ ] Cross-platform compatible
+
+See `FLUTTER_BEST_PRACTICES.md` for detailed guidelines.
+
