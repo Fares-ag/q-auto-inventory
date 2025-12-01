@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/widgets/history_entry_model.dart'; // Import the HistoryEntry model
+import 'package:flutter_application_1/models/history_entry_model.dart'; // Import the HistoryEntry model
 
 // This screen displays the history of a specific item.
 class HistoryScreen extends StatelessWidget {

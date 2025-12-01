@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_application_1/services/item_details_service.dart';
+import 'package:flutter_application_1/services/storage_service.dart';
+import 'package:flutter_application_1/config/app_theme.dart';
 import 'dart:io';
 
 // A widget for the checkout form, designed to be shown as a modal.
 class CheckoutWidget extends StatefulWidget {
+  final String itemId;
   final VoidCallback? onSave;
   final VoidCallback? onClose;
 
   const CheckoutWidget({
     Key? key,
+    required this.itemId,
     this.onSave,
     this.onClose,
   }) : super(key: key);
@@ -70,10 +75,20 @@ class _CheckoutWidgetState extends State<CheckoutWidget> {
     }
   }
 
-  // Function to simulate saving the checkout information.
-  void _saveCheckout() {
+  // Function to save checkout information to Firestore.
+  Future<void> _saveCheckout() async {
     // Validate the form.
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_returnDate == null || _returnTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select return date and time'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
       return;
     }
 
@@ -81,27 +96,73 @@ class _CheckoutWidgetState extends State<CheckoutWidget> {
       _isLoading = true;
     });
 
-    // Placeholder logic for saving.
-    print('Saving Checkout data:');
-    print('  Assigned From: ${_assignFromController.text}');
-    print('  Assigned To: ${_assignToController.text}');
-    print('  Admin: ${_adminController.text}');
-    print('  Return Date: $_returnDate');
-    print('  Return Time: $_returnTime');
-    print('  Attachment: ${_selectedAttachment != null ? 'Yes' : 'No'}');
+    try {
+      // Combine date and time
+      final returnDateTime = DateTime(
+        _returnDate!.year,
+        _returnDate!.month,
+        _returnDate!.day,
+        _returnTime!.hour,
+        _returnTime!.minute,
+      );
 
-    // Simulate save delay.
-    Future.delayed(const Duration(milliseconds: 500), () {
+      // Upload attachment if provided
+      String? attachmentUrl;
+      if (_selectedAttachment != null) {
+        try {
+          attachmentUrl = await StorageService.uploadAttachment(
+            file: _selectedAttachment!,
+            itemId: widget.itemId,
+            fileName: 'checkout_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          );
+        } catch (e) {
+          // Continue even if image upload fails
+          debugPrint('Failed to upload checkout image: $e');
+        }
+      }
+
+      // Save checkout to Firestore
+      await ItemDetailsService.addCheckout(
+        itemId: widget.itemId,
+        assignedFrom: _assignFromController.text.trim(),
+        assignedTo: _assignToController.text.trim(),
+        admin: _adminController.text.trim(),
+        returnDate: returnDateTime,
+        attachmentUrl: attachmentUrl,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Checkout saved successfully!'),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+      }
+
       if (widget.onSave != null) {
         widget.onSave!();
       }
-      setState(() {
-        _isLoading = false;
-      });
-      if (widget.onClose != null) {
+
+      if (mounted && widget.onClose != null) {
         widget.onClose!();
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save checkout: ${e.toString()}'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   // This function is for picking a photo from the gallery or camera.

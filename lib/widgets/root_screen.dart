@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 // REMOVED: import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter_application_1/widgets/items_screen.dart';
 import 'package:flutter_application_1/widgets/dashboard_screen.dart';
 import 'package:flutter_application_1/widgets/items_detail.dart'; // ADDED for QRScannerPage
-import 'package:flutter_application_1/widgets/item_model.dart';
-import 'package:flutter_application_1/widgets/issue_model.dart';
-import 'package:flutter_application_1/widgets/history_entry_model.dart';
-import 'dart:math';
+import 'package:flutter_application_1/widgets/menu_screen.dart';
+import 'package:flutter_application_1/widgets/alerts_screen.dart';
+import 'package:flutter_application_1/models/item_model.dart';
+import 'package:flutter_application_1/services/item_service.dart';
+import 'package:flutter_application_1/config/app_theme.dart';
+import 'package:flutter_application_1/providers/app_state_provider.dart';
+import 'package:flutter_application_1/providers/item_provider.dart';
 
 class RootScreen extends StatefulWidget {
   const RootScreen({super.key});
@@ -17,99 +21,54 @@ class RootScreen extends StatefulWidget {
 
 class _RootScreenState extends State<RootScreen> {
   int _selectedIndex = 0;
-  final PageController _pageController = PageController();
-
-  // Dummy data (remains the same)
-  final List<ItemModel> dummyItems = [
-    ItemModel(
-      id: "21252565",
-      name: 'Macbook pro 13"',
-      category: "Laptop",
-      variants: "2 Variants",
-      supplier: "Apple MacBook Air",
-      company: "Sawa Technologies",
-      date: "Tue 1 Aug 2025, 10:00",
-      itemType: ItemType.laptop,
-    ),
-    ItemModel(
-      id: "21252567",
-      name: 'Office Chair',
-      category: "Furniture",
-      variants: "1 Variant",
-      supplier: "IKEA",
-      company: "Sawa Technologies",
-      date: "Thu 3 Aug 2025, 11:00",
-      itemType: ItemType.furniture,
-      isTagged: true,
-      qrCodeId: "qr_12345",
-    ),
-    ItemModel(
-      id: "21252570",
-      name: 'Webcam C920',
-      category: "Accessory",
-      variants: "1 Variant",
-      supplier: "Logitech",
-      company: "Tech Solutions",
-      date: "Fri 4 Aug 2025, 16:00",
-      itemType: ItemType.webcam,
-      isTagged: true,
-      qrCodeId: "qr_67890",
-    ),
-  ];
-  final List<HistoryEntry> dummyHistory = [
-    HistoryEntry(
-        title: 'Item Created',
-        description: 'Macbook pro 13" added.',
-        timestamp: DateTime.now().subtract(const Duration(minutes: 5))),
-  ];
-  final List<Issue> dummyIssues = [
-    Issue(
-        issueId: '1',
-        description: 'Keyboard is missing a key.',
-        priority: 'High',
-        createdAt: DateTime.now()),
-  ];
 
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-      _pageController.animateToPage(
-        index,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.ease,
-      );
-    });
+    if (_selectedIndex != index) {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
   }
 
-  void _updateItem(ItemModel updatedItem) {
-    setState(() {
-      final index = dummyItems.indexWhere((item) => item.id == updatedItem.id);
-      if (index != -1) {
-        dummyItems[index] = updatedItem;
+  Future<void> _updateItem(ItemModel updatedItem) async {
+    try {
+      final itemProvider = Provider.of<ItemProvider>(context, listen: false);
+      await itemProvider.updateItem(updatedItem);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update item: ${e.toString()}'),
+            backgroundColor: AppTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
-    });
+    }
   }
 
-  // UPDATED: Scan function now uses the consistent QRScannerPage
+  // UPDATED: Scan function now uses Firestore to find items
   void _handleScan() {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => QRScannerPage(
-          onScan: (scannedCode) {
-            ItemModel? foundItem;
+          onScan: (scannedCode) async {
             try {
-              foundItem = dummyItems.firstWhere(
-                (item) => item.qrCodeId == scannedCode,
-              );
-            } catch (e) {
-              foundItem = null;
-            }
-
-            if (foundItem != null) {
-              _navigateToItemDetails(foundItem);
-            } else {
-              if (mounted) {
+              final foundItem = await ItemService.getItemByQrCode(scannedCode);
+              if (foundItem != null && mounted) {
+                _navigateToItemDetails(foundItem);
+              } else if (mounted) {
                 _showScannedDialog(scannedCode);
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error searching for item: ${e.toString()}'),
+                    backgroundColor: AppTheme.errorColor,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
               }
             }
           },
@@ -153,53 +112,121 @@ class _RootScreenState extends State<RootScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: PageView(
-        controller: _pageController,
-        onPageChanged: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
+      body: Consumer2<AppStateProvider, ItemProvider>(
+        builder: (context, appState, itemProvider, child) {
+          // Show loading indicator on initial load
+          if (appState.isLoading && appState.items.isEmpty) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+
+          // Handle errors
+          if (appState.error != null && appState.items.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: AppTheme.errorColor,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Error loading data',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    appState.error!,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => appState.refresh(),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // Use IndexedStack to preserve state and prevent rebuilds
+          return IndexedStack(
+            index: _selectedIndex,
+            children: [
+              DashboardScreen(
+                allItems: appState.items,
+                recentHistory: appState.recentHistory.take(10).toList(),
+                openIssues: appState.openIssues,
+                onNavigateToItems: () => _onItemTapped(1),
+              ),
+              ItemsScreen(
+                items: appState.items,
+                onUpdateItem: _updateItem,
+                navigateToItemDetails: _navigateToItemDetails,
+              ),
+              const AlertsScreen(),
+              const MenuScreen(),
+            ],
+          );
         },
-        // FIXED: Added placeholder screens to match the nav bar items
-        children: [
-          DashboardScreen(
-            allItems: dummyItems,
-            recentHistory: dummyHistory,
-            openIssues: dummyIssues,
-            onNavigateToItems: () => _onItemTapped(1),
-          ),
-          ItemsScreen(
-            items: dummyItems,
-            dummyHistory: dummyHistory,
-            dummyIssues: dummyIssues,
-            onUpdateItem: _updateItem,
-            navigateToItemDetails: _navigateToItemDetails,
-          ),
-          const Center(child: Text('Alerts Screen')), // Placeholder for Alerts
-          const Center(child: Text('Menu Screen')), // Placeholder for Menu
-        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.black,
-        onPressed: _handleScan,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.qr_code_scanner, color: Colors.white),
-      ),
-      bottomNavigationBar: BottomAppBar(
-        color: Colors.white,
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 6.0,
-        elevation: 0,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(0, 'Dashboard', Icons.dashboard_outlined),
-            _buildNavItem(1, 'Items', Icons.inventory_2_outlined),
-            const SizedBox(width: 48), // The space for the FAB
-            _buildNavItem(2, 'Alerts', Icons.warning_outlined),
-            _buildNavItem(3, 'Menu', Icons.menu),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: AppTheme.primaryGradient,
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primaryColor.withOpacity(0.4),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
           ],
+        ),
+        child: FloatingActionButton(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          onPressed: _handleScan,
+          child:
+              const Icon(Icons.qr_code_scanner, color: Colors.white, size: 28),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: BottomAppBar(
+          color: Colors.transparent,
+          elevation: 0,
+          shape: const CircularNotchedRectangle(),
+          notchMargin: 6.0,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(0, 'Dashboard', Icons.dashboard_outlined),
+              _buildNavItem(1, 'Items', Icons.inventory_2_outlined),
+              const SizedBox(width: 48), // The space for the FAB
+              _buildNavItem(2, 'Alerts', Icons.warning_outlined),
+              _buildNavItem(3, 'Menu', Icons.menu),
+            ],
+          ),
         ),
       ),
     );
@@ -210,24 +237,34 @@ class _RootScreenState extends State<RootScreen> {
     return GestureDetector(
       onTap: () => _onItemTapped(index),
       child: Container(
-        // Using container for a larger tap area
         color: Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 24,
-              color: isSelected ? Colors.black : Colors.grey[500],
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppTheme.primaryColor.withOpacity(0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                size: 24,
+                color:
+                    isSelected ? AppTheme.primaryColor : AppTheme.textTertiary,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
-                color: isSelected ? Colors.black : Colors.grey[500],
+                color:
+                    isSelected ? AppTheme.primaryColor : AppTheme.textTertiary,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
             ),

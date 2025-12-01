@@ -1,66 +1,36 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/widgets/item_model.dart';
+import 'package:flutter/services.dart';
+import 'dart:ui' as ui;
+import 'package:flutter_application_1/models/item_model.dart';
+import 'package:flutter_application_1/models/assignment_model.dart';
 import 'package:flutter_application_1/widgets/history_screen.dart';
 import 'package:flutter_application_1/widgets/checkout.dart';
 import 'package:flutter_application_1/widgets/raise_issue.dart';
-import 'package:flutter_application_1/widgets/issue_model.dart';
-import 'package:flutter_application_1/widgets/history_entry_model.dart';
-import 'package:image_picker/image_picker.dart'; // Add the missing import
-import 'package:mobile_scanner/mobile_scanner.dart'; // Import the scanner
+import 'package:flutter_application_1/models/history_entry_model.dart';
+import 'package:flutter_application_1/models/comment_model.dart';
+import 'package:flutter_application_1/models/attachment_model.dart';
+import 'package:flutter_application_1/models/information_model.dart';
+import 'package:flutter_application_1/config/app_theme.dart';
+import 'package:flutter_application_1/services/storage_service.dart';
+import 'package:flutter_application_1/services/item_details_service.dart';
+import 'package:flutter_application_1/services/firebase_service.dart';
+import 'package:flutter_application_1/widgets/common/item_icon_builder.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'dart:io';
-import 'dart:math';
-
-// Data model for a single comment.
-class Comment {
-  final String text;
-  final String author;
-  final DateTime timestamp;
-
-  Comment({
-    required this.text,
-    required this.author,
-    required this.timestamp,
-  });
-}
-
-// Data model for a single attachment.
-class Attachment {
-  final String name;
-  final File file;
-  final DateTime timestamp;
-
-  Attachment({
-    required this.name,
-    required this.file,
-    required this.timestamp,
-  });
-}
-
-// Data model for a single information entry.
-class Information {
-  final String title;
-  final String body;
-  final DateTime timestamp;
-
-  Information({
-    required this.title,
-    required this.body,
-    required this.timestamp,
-  });
-}
-
-// Data model for an assignment.
-class Assignment {
-  final String staffName;
-  final String location;
-  final DateTime timestamp;
-
-  Assignment({
-    required this.staffName,
-    required this.location,
-    required this.timestamp,
-  });
-}
+// New reusable widgets
+import 'package:flutter_application_1/widgets/item_details/expandable_section.dart';
+import 'package:flutter_application_1/widgets/item_details/comments_section.dart';
+import 'package:flutter_application_1/widgets/item_details/attachments_section.dart';
+import 'package:flutter_application_1/widgets/item_details/issues_section.dart';
+import 'package:flutter_application_1/widgets/item_details/information_section.dart';
+import 'package:flutter_application_1/widgets/item_details/qr_code_section.dart';
+import 'package:flutter_application_1/widgets/item_details/item_header.dart';
+import 'package:flutter_application_1/widgets/item_details/action_button.dart';
+import 'package:flutter_application_1/widgets/common/history_entry_card.dart';
 
 // New widget for assigning an item to a user.
 class AssignToUserWidget extends StatefulWidget {
@@ -81,13 +51,47 @@ class _AssignToUserWidgetState extends State<AssignToUserWidget> {
   final _formKey = GlobalKey<FormState>();
   final _staffNameController = TextEditingController();
   final _locationController = TextEditingController();
+  final _assignedFromController = TextEditingController();
+  final _adminController = TextEditingController();
+  DateTime? _returnDate;
+  TimeOfDay? _returnTime;
   bool _isLoading = false;
 
   @override
   void dispose() {
     _staffNameController.dispose();
     _locationController.dispose();
+    _assignedFromController.dispose();
+    _adminController.dispose();
     super.dispose();
+  }
+
+  Future<void> _presentDatePicker() async {
+    final now = DateTime.now();
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _returnDate ?? now,
+      firstDate: now,
+      lastDate: DateTime(2100),
+    );
+    if (pickedDate != null) {
+      setState(() {
+        _returnDate = pickedDate;
+      });
+    }
+  }
+
+  Future<void> _presentTimePicker() async {
+    final now = TimeOfDay.now();
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: _returnTime ?? now,
+    );
+    if (pickedTime != null) {
+      setState(() {
+        _returnTime = pickedTime;
+      });
+    }
   }
 
   void _saveAssignment() {
@@ -95,13 +99,35 @@ class _AssignToUserWidgetState extends State<AssignToUserWidget> {
       return;
     }
 
+    if (_returnDate == null || _returnTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select return date and time'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
+    // Combine date and time
+    final returnDateTime = DateTime(
+      _returnDate!.year,
+      _returnDate!.month,
+      _returnDate!.day,
+      _returnTime!.hour,
+      _returnTime!.minute,
+    );
+
     final newAssignment = Assignment(
       staffName: _staffNameController.text.trim(),
       location: _locationController.text.trim(),
+      assignedFrom: _assignedFromController.text.trim(),
+      admin: _adminController.text.trim(),
+      returnDate: returnDateTime,
       timestamp: DateTime.now(),
     );
 
@@ -196,38 +222,149 @@ class _AssignToUserWidgetState extends State<AssignToUserWidget> {
                       return null;
                     },
                   ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _assignedFromController,
+                    decoration: InputDecoration(
+                      hintText: 'Assigned From',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter who this is assigned from';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _adminController,
+                    decoration: InputDecoration(
+                      hintText: 'Admin',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter the admin\'s name';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  // Return Date and Time
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _presentDatePicker,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 16, horizontal: 12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey[300]!),
+                              borderRadius: BorderRadius.circular(12),
+                              color: Colors.grey[50],
+                            ),
+                            child: Text(
+                              _returnDate == null
+                                  ? 'Select Return Date'
+                                  : '${_returnDate!.day}/${_returnDate!.month}/${_returnDate!.year}',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: _returnDate == null
+                                    ? Colors.grey[400]
+                                    : Colors.black,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _presentTimePicker,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 16, horizontal: 12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey[300]!),
+                              borderRadius: BorderRadius.circular(12),
+                              color: Colors.grey[50],
+                            ),
+                            child: Text(
+                              _returnTime == null
+                                  ? 'Select Return Time'
+                                  : _returnTime!.format(context),
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: _returnTime == null
+                                    ? Colors.grey[400]
+                                    : Colors.black,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 40),
                   SizedBox(
                     width: double.infinity,
                     height: 56,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _saveAssignment,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        disabledBackgroundColor: Colors.grey[400],
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: _isLoading ? null : AppTheme.primaryGradient,
+                        color: _isLoading ? Colors.grey[400] : null,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: _isLoading ? null : [
+                          BoxShadow(
+                            color: AppTheme.primaryColor.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _saveAssignment,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor:
+                                      AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Text(
+                                'Save Assignment',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            )
-                          : const Text(
-                              'Save Assignment',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                      ),
                     ),
                   ),
                 ],
@@ -315,24 +452,21 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     'Monthly',
   ];
 
-  List<Issue> reportedIssues = [];
-  List<Comment> comments = [];
-  List<Attachment> attachments = [];
-  List<Information> informationEntries = [];
-  List<HistoryEntry> _historyItems = [];
-
   String? _taggedQrCode;
-
   final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
     _taggedQrCode = widget.item.qrCodeId;
-    _addHistoryEntry(
-      title: 'Item Details Viewed',
-      description: 'You are now viewing this item\'s details.',
-      icon: Icons.visibility,
+    // Add initial history entry
+    ItemDetailsService.addHistoryEntry(
+      widget.item.id,
+      HistoryEntry(
+        title: 'Item Details Viewed',
+        description: 'You are now viewing this item\'s details.',
+        timestamp: DateTime.now(),
+      ),
     );
   }
 
@@ -348,18 +482,19 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     super.dispose();
   }
 
-  void _addHistoryEntry(
-      {required String title, required String description, IconData? icon}) {
-    setState(() {
-      _historyItems.add(
-        HistoryEntry(
-          title: title,
-          description: description,
-          timestamp: DateTime.now(),
-          icon: icon,
-        ),
-      );
-    });
+  Future<void> _addHistoryEntry(
+      {required String title,
+      required String description,
+      IconData? icon}) async {
+    await ItemDetailsService.addHistoryEntry(
+      widget.item.id,
+      HistoryEntry(
+        title: title,
+        description: description,
+        timestamp: DateTime.now(),
+        icon: icon,
+      ),
+    );
   }
 
   void _saveInformation(String section) {
@@ -380,8 +515,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
         final time = _selectedTime;
         final repeat = _selectedRepeatOption;
 
-        print(
-            'Saving Reminder: Name: $name, Date: $date, Time: $time, Repeat: $repeat');
+        // Save reminder logic would go here
         _addHistoryEntry(
           title: 'Reminder Saved',
           description: 'Set a reminder for "$name" to repeat $repeat.',
@@ -399,75 +533,251 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     );
   }
 
-  void _saveInformationEntry() {
+  Future<void> _saveInformationEntry() async {
     final title = _informationTitleController.text.trim();
     final body = _informationBodyController.text.trim();
 
     if (title.isNotEmpty || body.isNotEmpty) {
       final newInformation = Information(
+        id: '',
         title: title.isEmpty ? 'Untitled' : title,
         body: body,
         timestamp: DateTime.now(),
       );
-      setState(() {
-        informationEntries.add(newInformation);
-      });
-      _addHistoryEntry(
-        title: 'Information Updated',
-        description: 'Added a new information entry: "${newInformation.title}"',
-        icon: Icons.info_outline,
-      );
-      _informationTitleController.clear();
-      _informationBodyController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Information saved successfully!')),
-      );
+
+      try {
+        await ItemDetailsService.addInformation(widget.item.id, newInformation);
+        await _addHistoryEntry(
+          title: 'Information Updated',
+          description:
+              'Added a new information entry: "${newInformation.title}"',
+          icon: Icons.info_outline,
+        );
+        _informationTitleController.clear();
+        _informationBodyController.clear();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Information saved successfully!')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to save information: ${e.toString()}'),
+              backgroundColor: AppTheme.errorColor,
+            ),
+          );
+        }
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please enter a title or body for the information.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content:
+                  Text('Please enter a title or body for the information.')),
+        );
+      }
     }
   }
 
-  void _saveComment() {
+  Future<void> _saveComment() async {
     if (_commentController.text.isNotEmpty) {
+      final user = FirebaseService.currentUser;
       final newComment = Comment(
+        id: '',
         text: _commentController.text,
-        author: 'Charlotte',
+        author: user?.email?.split('@').first ?? 'User',
         timestamp: DateTime.now(),
       );
-      setState(() {
-        comments.add(newComment);
-      });
-      _addHistoryEntry(
-        title: 'New Comment Added',
-        description: 'Added a new comment: "${_commentController.text}"',
-        icon: Icons.comment,
-      );
-      _commentController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Comment saved successfully!')),
-      );
+
+      try {
+        await ItemDetailsService.addComment(widget.item.id, newComment);
+        await _addHistoryEntry(
+          title: 'New Comment Added',
+          description: 'Added a new comment: "${_commentController.text}"',
+          icon: Icons.comment,
+        );
+        _commentController.clear();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Comment saved successfully!')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to save comment: ${e.toString()}'),
+              backgroundColor: AppTheme.errorColor,
+            ),
+          );
+        }
+      }
     }
   }
 
   void _pickAttachment() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.camera);
+    // Show source selection
+    final ImageSource? source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: SafeArea(
+            child: Wrap(
+              children: <Widget>[
+                ListTile(
+                  leading: const Icon(Icons.photo_library, color: Colors.blue),
+                  title: const Text('Choose from Gallery'),
+                  onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_camera, color: Colors.green),
+                  title: const Text('Take a Photo'),
+                  onTap: () => Navigator.of(context).pop(ImageSource.camera),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (source == null) return;
+
+    final XFile? image = await _picker.pickImage(source: source);
     if (image != null) {
+      final file = File(image.path);
+      final timestamp = DateTime.now();
+
+      // Create attachment and save to Firestore first
       final newAttachment = Attachment(
-        name: 'Attachment ${attachments.length + 1}',
-        file: File(image.path),
-        timestamp: DateTime.now(),
+        id: '',
+        name: 'Attachment ${timestamp.millisecondsSinceEpoch}',
+        timestamp: timestamp,
       );
-      setState(() {
-        attachments.add(newAttachment);
-      });
-      _addHistoryEntry(
-        title: 'New Attachment Added',
-        description: 'Added a new attachment via camera.',
-        icon: Icons.attachment,
+
+      try {
+        final attachmentId = await ItemDetailsService.addAttachment(
+          widget.item.id,
+          newAttachment,
+        );
+
+        // Upload to Firebase Storage in background
+        _uploadAttachment(attachmentId, file, newAttachment.name);
+
+        await _addHistoryEntry(
+          title: 'New Attachment Added',
+          description: 'Added a new attachment.',
+          icon: Icons.attachment,
+        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to save attachment: ${e.toString()}'),
+              backgroundColor: AppTheme.errorColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  /// Download QR code as image
+  Future<void> _downloadQrCode(String barcode) async {
+    try {
+      // Create QR code painter
+      final painter = QrPainter(
+        data: barcode,
+        version: QrVersions.auto,
+        errorCorrectionLevel: QrErrorCorrectLevel.L,
+        color: Colors.black,
+        emptyColor: Colors.white,
       );
+
+      // Render to image
+      final picRecorder = ui.PictureRecorder();
+      final canvas = Canvas(picRecorder);
+      const size = 300.0;
+      painter.paint(canvas, Size(size, size));
+      final picture = picRecorder.endRecording();
+      final image = await picture.toImage(size.toInt(), size.toInt());
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
+
+      // Save to file
+      final directory = await getApplicationDocumentsDirectory();
+      final fileName =
+          'QR_${widget.item.name.replaceAll(' ', '_')}_$barcode.png';
+      final filePath = '${directory.path}/$fileName';
+      final file = File(filePath);
+      await file.writeAsBytes(pngBytes);
+
+      // Share the file
+      await Share.shareXFiles(
+        [XFile(filePath)],
+        text: 'QR Code for ${widget.item.name}',
+        subject: 'Item QR Code: $barcode',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('QR code saved and ready to share'),
+            backgroundColor: AppTheme.successColor,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to download QR code: ${e.toString()}'),
+            backgroundColor: AppTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _uploadAttachment(
+      String attachmentId, File file, String name) async {
+    try {
+      final url = await StorageService.uploadAttachment(
+        file: file,
+        itemId: widget.item.id,
+        fileName: name,
+      );
+
+      // Update attachment with URL in Firestore
+      await ItemDetailsService.updateAttachment(
+        widget.item.id,
+        attachmentId,
+        url,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload attachment: ${e.toString()}'),
+            backgroundColor: AppTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -547,13 +857,33 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                 ),
               ),
               child: AssignToUserWidget(
-                onSave: (assignment) {
-                  _addHistoryEntry(
-                    title: 'Item Assigned',
-                    description:
-                        'Assigned to ${assignment.staffName} at ${assignment.location}.',
-                    icon: Icons.assignment_ind,
-                  );
+                onSave: (assignment) async {
+                  // Save assignment as a checkout
+                  try {
+                    await ItemDetailsService.addCheckout(
+                      itemId: widget.item.id,
+                      assignedFrom: assignment.assignedFrom,
+                      assignedTo: assignment.staffName,
+                      admin: assignment.admin,
+                      returnDate: assignment.returnDate,
+                    );
+                    await _addHistoryEntry(
+                      title: 'Item Assigned',
+                      description:
+                          'Assigned to ${assignment.staffName} at ${assignment.location} by ${assignment.admin}. Return date: ${assignment.returnDate.day}/${assignment.returnDate.month}/${assignment.returnDate.year}.',
+                      icon: Icons.assignment_ind,
+                    );
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                              'Failed to save assignment: ${e.toString()}'),
+                          backgroundColor: AppTheme.errorColor,
+                        ),
+                      );
+                    }
+                  }
                 },
                 onClose: () {
                   Navigator.of(context).pop();
@@ -577,9 +907,9 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
       isScrollControlled: true,
       builder: (context) {
         return CheckoutWidget(
-          onSave: () {
-            print('Checkout process completed for item: ${widget.item.name}');
-            _addHistoryEntry(
+          itemId: widget.item.id,
+          onSave: () async {
+            await _addHistoryEntry(
               title: 'Item Checked Out',
               description: 'The item was successfully checked out to a user.',
               icon: Icons.check,
@@ -604,18 +934,25 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
       isScrollControlled: true,
       builder: (context) {
         return RaiseIssueWidget(
-          onSave: (newIssue) {
-            setState(() {
-              reportedIssues.add(newIssue);
-            });
-            _addHistoryEntry(
-              title: 'New Issue Reported',
-              description:
-                  'Priority: ${newIssue.priority} - ${newIssue.description}',
-              icon: Icons.warning_amber,
-            );
-            print('Issue reported for item: ${widget.item.name}');
-            print('Current issues: ${reportedIssues.length}');
+          onSave: (newIssue) async {
+            try {
+              await ItemDetailsService.addIssue(widget.item.id, newIssue);
+              await _addHistoryEntry(
+                title: 'New Issue Reported',
+                description:
+                    'Priority: ${newIssue.priority} - ${newIssue.description}',
+                icon: Icons.warning_amber,
+              );
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to save issue: ${e.toString()}'),
+                    backgroundColor: AppTheme.errorColor,
+                  ),
+                );
+              }
+            }
           },
           onClose: () {
             Navigator.of(context).pop();
@@ -625,230 +962,15 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     );
   }
 
-  Widget _buildIssueCard(Issue issue) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Priority: ${issue.priority}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'Status: ${issue.status}',
-                style: TextStyle(
-                  color: Colors.green[700],
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(issue.description),
-          const SizedBox(height: 8),
-          Text(
-            'Issue ID: ${issue.issueId}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Reporter: ${issue.reporter}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInformationCard(Information info) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            info.title,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (info.body.isNotEmpty)
-            Text(
-              info.body,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
-            ),
-          const SizedBox(height: 8),
-          Text(
-            'Saved on ${info.timestamp.day}/${info.timestamp.month}/${info.timestamp.year} at ${info.timestamp.hour}:${info.timestamp.minute}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHistoryEntryCard(HistoryEntry entry) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (entry.icon != null) ...[
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(entry.icon, size: 24, color: Colors.blue),
-            ),
-            const SizedBox(width: 16),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  entry.description,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${entry.timestamp.day}/${entry.timestamp.month}/${entry.timestamp.year} at ${entry.timestamp.hour}:${entry.timestamp.minute}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCommentCard(Comment comment) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            comment.text,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.black,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'By ${comment.author} on ${comment.timestamp.day}/${comment.timestamp.month}/${comment.timestamp.year} at ${comment.timestamp.hour}:${comment.timestamp.minute}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAttachmentCard(Attachment attachment) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.insert_photo_outlined, color: Colors.grey, size: 24),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  attachment.name,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  'Added on ${attachment.timestamp.day}/${attachment.timestamp.month}/${attachment.timestamp.year}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.download, color: Colors.blue),
-            onPressed: () {
-              // Add download logic here.
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.grey[50],
+        backgroundColor: AppTheme.backgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -857,76 +979,50 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.grey[300],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Center(child: buildItemIcon(widget.item.itemType)),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.item.category,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.item.name,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '#${widget.item.id}',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            ItemHeader(
+              item: widget.item,
             ),
             const SizedBox(height: 24),
-            GestureDetector(
-              onTap: _handleAssignToUser,
-              child: Row(
-                children: [
-                  Icon(Icons.person_outline, color: Colors.grey[600]),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Assign To User',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[600],
-                      decoration: TextDecoration.underline,
-                    ),
+            // Assign To User Button - Made more prominent
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryColor.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
                   ),
                 ],
+              ),
+              child: ElevatedButton.icon(
+                onPressed: _handleAssignToUser,
+                icon: const Icon(Icons.person_add_alt_1, color: Colors.white),
+                label: const Text(
+                  'Assign To User',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 24),
             Row(
               children: [
                 Expanded(
-                  child: _buildActionButton(
+                  child: ActionButton(
                     icon: Icons.shopping_cart_checkout_outlined,
                     text: 'Checkout',
                     onPressed: _handleCheckout,
@@ -934,7 +1030,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _buildActionButton(
+                  child: ActionButton(
                     icon: Icons.report_problem_outlined,
                     text: 'Raise Issue',
                     onPressed: _handleRaiseIssue,
@@ -965,30 +1061,15 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                 ),
               ),
             ),
-            _buildExpandableSection(
+            ExpandableSection(
               title: 'Issues',
               subtitle: 'Report and manage issues for this item here',
               isExpanded: issuesExpanded,
               onTap: () => setState(() => issuesExpanded = !issuesExpanded),
               hasSaveButton: false,
-              expandedContent: Column(
-                children: [
-                  ...reportedIssues
-                      .map((issue) => _buildIssueCard(issue))
-                      .toList(),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _handleRaiseIssue,
-                      child: const Text('Add New Issue'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
+              expandedContent: IssuesSection(
+                itemId: widget.item.id,
+                onRaiseIssue: _handleRaiseIssue,
               ),
             ),
             _buildExpandableSection(
@@ -1085,7 +1166,7 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                       decoration: const InputDecoration(
                         border: InputBorder.none,
                       ),
-                      value: _selectedRepeatOption,
+                      initialValue: _selectedRepeatOption,
                       items: _repeatOptions.map((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
@@ -1102,162 +1183,55 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                 ],
               ),
             ),
-            _buildExpandableSection(
+            ExpandableSection(
               title: 'Information',
               subtitle: 'Keep all important information in one handy place',
               isExpanded: informationExpanded,
               onTap: () =>
                   setState(() => informationExpanded = !informationExpanded),
               hasSaveButton: true,
-              expandedContent: Column(
-                children: [
-                  // Display existing information entries
-                  ...informationEntries.reversed
-                      .map((info) => _buildInformationCard(info))
-                      .toList(),
-                  if (informationEntries.isNotEmpty) const SizedBox(height: 16),
-
-                  // New input fields for adding a new entry
-                  TextFormField(
-                    controller: _informationTitleController,
-                    decoration: InputDecoration(
-                      hintText: 'Information Title',
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _informationBodyController,
-                    maxLines: 5,
-                    decoration: InputDecoration(
-                      hintText: 'Enter additional information...',
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                  ),
-                ],
+              onSave: () => _saveInformation('Information'),
+              expandedContent: InformationSection(
+                itemId: widget.item.id,
+                titleController: _informationTitleController,
+                bodyController: _informationBodyController,
               ),
             ),
-            _buildExpandableSection(
+            ExpandableSection(
               title: 'Comments',
               subtitle: 'Add and view comments on this item',
               isExpanded: commentsExpanded,
               onTap: () => setState(() => commentsExpanded = !commentsExpanded),
               hasSaveButton: false,
-              expandedContent: Column(
-                children: [
-                  ...comments.reversed
-                      .map((comment) => _buildCommentCard(comment))
-                      .toList(),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _commentController,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: 'Write a new comment...',
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _saveComment,
-                      child: const Text('Add Comment'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
+              expandedContent: CommentsSection(
+                itemId: widget.item.id,
+                commentController: _commentController,
+                onSaveComment: _saveComment,
               ),
             ),
-            _buildExpandableSection(
+            ExpandableSection(
               title: 'Tags',
               subtitle: 'Tag your assets to easily identify',
               isExpanded: tagsExpanded,
               onTap: () => setState(() => tagsExpanded = !tagsExpanded),
               hasSaveButton: false,
-              expandedContent: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_taggedQrCode != null)
-                    Text(
-                      'Tagged with QR Code: $_taggedQrCode',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[800],
-                      ),
-                    )
-                  else
-                    const Text(
-                      'This item is not yet tagged.',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.red,
-                      ),
-                    ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: widget.item.isTagged ? null : _handleTagging,
-                      child: Text(widget.item.isTagged
-                          ? 'Already Tagged'
-                          : 'Scan to Tag'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
+              expandedContent: QrCodeSection(
+                qrCode: _taggedQrCode,
+                isTagged: widget.item.isTagged,
+                onTag: _handleTagging,
+                onDownload: () => _downloadQrCode(_taggedQrCode!),
               ),
             ),
-            _buildExpandableSection(
+            ExpandableSection(
               title: 'Attachments',
               subtitle: 'Add photos and documents to your item',
               isExpanded: attachmentsExpanded,
               onTap: () =>
                   setState(() => attachmentsExpanded = !attachmentsExpanded),
               hasSaveButton: false,
-              expandedContent: Column(
-                children: [
-                  ...attachments
-                      .map((attachment) => _buildAttachmentCard(attachment))
-                      .toList(),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _pickAttachment,
-                      child: Text('Add Attachment'),
-                    ),
-                  ),
-                ],
+              expandedContent: AttachmentsSection(
+                itemId: widget.item.id,
+                onAddAttachment: _pickAttachment,
               ),
             ),
             _buildExpandableSection(
@@ -1266,58 +1240,35 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
               isExpanded: historyExpanded,
               onTap: () {
                 if (!historyExpanded) {
+                  // Navigate to history screen with stream
                   Navigator.of(context).push(MaterialPageRoute(
                     fullscreenDialog: true,
-                    builder: (context) => HistoryScreen(history: _historyItems),
+                    builder: (context) => StreamBuilder<List<HistoryEntry>>(
+                      stream:
+                          ItemDetailsService.getHistoryStream(widget.item.id),
+                      builder: (context, snapshot) {
+                        final historyItems = snapshot.data ?? [];
+                        return HistoryScreen(history: historyItems);
+                      },
+                    ),
                   ));
                 }
                 setState(() => historyExpanded = !historyExpanded);
               },
               hasSaveButton: false,
-              expandedContent: Column(
-                children: _historyItems.reversed
-                    .map((entry) => _buildHistoryEntryCard(entry))
-                    .toList(),
+              expandedContent: StreamBuilder<List<HistoryEntry>>(
+                stream: ItemDetailsService.getHistoryStream(widget.item.id),
+                builder: (context, snapshot) {
+                  final historyItems = snapshot.data ?? [];
+                  return Column(
+                    children: historyItems.reversed
+                        .map((entry) => HistoryEntryCard(entry: entry))
+                        .toList(),
+                  );
+                },
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String text,
-    required VoidCallback onPressed,
-  }) {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[300]!),
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.white,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 20, color: Colors.black87),
-              const SizedBox(width: 8),
-              Text(
-                text,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -1334,9 +1285,19 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
+        color: AppTheme.cardColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: AppTheme.primaryColor.withOpacity(0.1),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryColor.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -1384,11 +1345,11 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(12),
-                  bottomRight: Radius.circular(12),
+              decoration: const BoxDecoration(
+                color: AppTheme.backgroundColor,
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(18),
                 ),
               ),
               child: Column(
@@ -1404,19 +1365,33 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                       ),
                   if (hasSaveButton) ...[
                     const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => _saveInformation(title),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: AppTheme.primaryGradient,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryColor.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      child: const Text(
-                        'Save',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                      child: ElevatedButton(
+                        onPressed: () => _saveInformation(title),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Save',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
@@ -1427,73 +1402,5 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
         ],
       ),
     );
-  }
-
-  Widget buildItemIcon(ItemType type) {
-    switch (type) {
-      case ItemType.laptop:
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 35,
-              height: 22,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Container(
-              width: 40,
-              height: 3,
-              decoration: BoxDecoration(
-                color: Colors.grey[600],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ],
-        );
-      case ItemType.keyboard:
-        return Container(
-          width: 35,
-          height: 25,
-          decoration: BoxDecoration(
-            color: Colors.grey[700],
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: GridView.builder(
-            padding: const EdgeInsets.all(4),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              childAspectRatio: 1,
-              crossAxisSpacing: 1,
-              mainAxisSpacing: 1,
-            ),
-            itemCount: 12,
-            itemBuilder: (context, index) => Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[800],
-                borderRadius: BorderRadius.circular(1),
-              ),
-            ),
-          ),
-        );
-      case ItemType.furniture:
-        return const Icon(Icons.chair, size: 40, color: Colors.brown);
-      case ItemType.monitor:
-        return const Icon(Icons.monitor, size: 40, color: Colors.black);
-      case ItemType.tablet:
-        return const Icon(Icons.tablet_android,
-            size: 40, color: Colors.blueGrey);
-      case ItemType.webcam:
-        return const Icon(Icons.videocam, size: 40, color: Colors.grey);
-      default:
-        return Icon(Icons.inventory, color: Colors.grey[600]);
-    }
   }
 }

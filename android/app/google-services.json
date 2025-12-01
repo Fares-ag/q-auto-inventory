@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "228338593098",
+    "project_id": "paeed-b35ef",
+    "storage_bucket": "paeed-b35ef.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:228338593098:android:677c8a7d08b729e3a025b3",
+        "android_client_info": {
+          "package_name": "com.paeedal"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAIf9hzo5B3C1kZ4J6f9osRfeqs-rhy56k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

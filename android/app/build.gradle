@@ -1,6 +1,5 @@
 plugins {
     id "com.android.application"
-    id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -23,7 +22,7 @@ if (flutterVersionName == null) {
 }
 
 android {
-    namespace "com.example.flutter_application_1"
+    namespace "com.paeedal"
     compileSdkVersion flutter.compileSdkVersion
     
     compileOptions {
@@ -32,7 +31,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.flutter_application_1"
+        applicationId "com.paeedal"
         minSdkVersion flutter.minSdkVersion
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
@@ -49,3 +48,6 @@ android {
 flutter {
     source "../.."
 }
+
+// Firebase Google Services plugin
+apply plugin: 'com.google.gms.google-services'

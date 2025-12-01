@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// Storage rules - Update these for production!
+// Currently set to allow authenticated users only
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      // Allow read/write for authenticated users
+      // For development, you can use: allow read, write: if true;
+      // For production, use: allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null;
+    }
+  }
+}

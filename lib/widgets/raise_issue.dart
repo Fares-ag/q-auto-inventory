@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:math';
-import 'package:flutter_application_1/widgets/issue_model.dart';
+import 'package:flutter_application_1/models/issue_model.dart';
 
 // This widget is a form for users to raise an issue for an item.
 // It is designed to be shown as a modal bottom sheet.
@@ -27,15 +27,23 @@ class _RaiseIssueWidgetState extends State<RaiseIssueWidget> {
   final _formKey = GlobalKey<FormState>();
   // Controller for the issue description text field.
   final _descriptionController = TextEditingController();
+  final _reporterController = TextEditingController();
 
   // State variables for the form.
   String _selectedPriority = 'None';
+  String _selectedStatus = 'Open';
   final List<String> _priorityOptions = [
     'None',
     'Low',
     'Medium',
     'High',
     'Critical',
+  ];
+  final List<String> _statusOptions = [
+    'Open',
+    'In Progress',
+    'Resolved',
+    'Closed',
   ];
   File? _selectedAttachment;
   final ImagePicker _picker = ImagePicker();
@@ -44,6 +52,7 @@ class _RaiseIssueWidgetState extends State<RaiseIssueWidget> {
   @override
   void dispose() {
     _descriptionController.dispose();
+    _reporterController.dispose();
     super.dispose();
   }
 
@@ -57,7 +66,7 @@ class _RaiseIssueWidgetState extends State<RaiseIssueWidget> {
     }
   }
 
-  // Function to simulate saving the issue report.
+  // Function to save the issue report.
   void _saveIssue() {
     // Validate the form.
     if (!_formKey.currentState!.validate()) {
@@ -76,30 +85,21 @@ class _RaiseIssueWidgetState extends State<RaiseIssueWidget> {
       issueId: newIssueId,
       description: _descriptionController.text.trim(),
       priority: _selectedPriority,
-      attachment: _selectedAttachment,
+      status: _selectedStatus,
+      reporter: _reporterController.text.trim(),
       createdAt: DateTime.now(),
     );
 
-    // Placeholder logic for saving.
-    print('Saving Issue Report:');
-    print('  ID: ${newIssue.issueId}');
-    print('  Description: ${newIssue.description}');
-    print('  Priority: ${newIssue.priority}');
-    print('  Attachment: ${newIssue.attachment != null ? 'Yes' : 'No'}');
-    print('  Reporter: ${newIssue.reporter}');
-
-    // Simulate save delay.
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (widget.onSave != null) {
-        widget.onSave!(newIssue);
-      }
-      setState(() {
-        _isLoading = false;
-      });
-      if (widget.onClose != null) {
-        widget.onClose!();
-      }
+    // Call the save callback
+    if (widget.onSave != null) {
+      widget.onSave!(newIssue);
+    }
+    setState(() {
+      _isLoading = false;
     });
+    if (widget.onClose != null) {
+      widget.onClose!();
+    }
   }
 
   @override
@@ -171,6 +171,29 @@ class _RaiseIssueWidgetState extends State<RaiseIssueWidget> {
                   ),
                   const SizedBox(height: 20),
 
+                  // Reporter field
+                  TextFormField(
+                    controller: _reporterController,
+                    decoration: InputDecoration(
+                      hintText: 'Reporter Name *',
+                      hintStyle: TextStyle(color: Colors.grey[400]),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter the reporter name';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
                   // Priority dropdown
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -182,8 +205,9 @@ class _RaiseIssueWidgetState extends State<RaiseIssueWidget> {
                     child: DropdownButtonFormField<String>(
                       decoration: const InputDecoration(
                         border: InputBorder.none,
+                        labelText: 'Priority *',
                       ),
-                      value: _selectedPriority,
+                      initialValue: _selectedPriority,
                       items: _priorityOptions.map((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
@@ -193,6 +217,41 @@ class _RaiseIssueWidgetState extends State<RaiseIssueWidget> {
                       onChanged: (String? newValue) {
                         setState(() {
                           _selectedPriority = newValue!;
+                        });
+                      },
+                      validator: (value) {
+                        if (value == null || value == 'None') {
+                          return 'Please select a priority';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Status dropdown
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        labelText: 'Status *',
+                      ),
+                      initialValue: _selectedStatus,
+                      items: _statusOptions.map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          _selectedStatus = newValue!;
                         });
                       },
                     ),

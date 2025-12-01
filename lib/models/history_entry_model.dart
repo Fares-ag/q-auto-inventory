@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-// This data model class defines the structure for a single history entry.
+/// Data model for a single history entry.
 class HistoryEntry {
   final String title;
   final String description;
@@ -14,3 +14,5 @@ class HistoryEntry {
     this.icon,
   });
 }
+
+
