@@ -1,22 +1,198 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ── Auth helpers ────────────────────────────────────────────────────────
+
     function isSignedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
-    // Default: restrict all collections to authenticated users
+    function userDocPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function staffDocPath() {
+      return /databases/$(database)/documents/staff/$(request.auth.uid);
+    }
+
+    function userData() {
+      return exists(userDocPath()) ? get(userDocPath()).data : null;
+    }
+
+    function staffData() {
+      return exists(staffDocPath()) ? get(staffDocPath()).data : null;
+    }
+
+    function isAccountActive() {
+      let u = userData();
+      return u == null
+        || (
+          (!('isDisabled' in u) || u.isDisabled == false)
+          && (!('isActive' in u) || u.isActive == true)
+        );
+    }
+
+    function userPerms() {
+      return userData() != null && 'permissions' in userData()
+        ? userData().permissions
+        : [];
+    }
+
+    function staffPerms() {
+      return staffData() != null && 'permissions' in staffData()
+        ? staffData().permissions
+        : [];
+    }
+
+    function hasPerm(perm) {
+      return isSignedIn()
+        && isAccountActive()
+        && (
+          request.auth.token.admin == true
+          || userPerms().hasAny([perm, 'admin', '*'])
+          || staffPerms().hasAny([perm, 'admin', '*'])
+        );
+    }
+
+    function isAdmin() {
+      return hasPerm('admin');
+    }
+
+    function canManageItems() {
+      return hasPerm('manage_items');
+    }
+
+    function canManageDepartments() {
+      return hasPerm('manage_departments');
+    }
+
+    function canManageStaff() {
+      return hasPerm('manage_staff');
+    }
+
+    function canViewReports() {
+      return hasPerm('view_reports');
+    }
+
+    function canEditFinance() {
+      return hasPerm('finance')
+        || hasPerm('edit_financial_fields')
+        || hasPerm('edit_asset_number');
+    }
+
+    // ── Privileged collections (admin-only writes) ────────────────────────
+
+    match /users/{userId} {
+      allow read: if isSignedIn()
+        && isAccountActive()
+        && (request.auth.uid == userId || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /permissionSets/{setId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /system/{docId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── Org structure ───────────────────────────────────────────────────────
+
+    match /departments/{deptId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create, update, delete: if canManageDepartments() || isAdmin();
+    }
+
+    match /subDepartments/{subDeptId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create, update, delete: if canManageDepartments() || isAdmin();
+    }
+
+    match /sub_departments/{subDeptId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create, update, delete: if canManageDepartments() || isAdmin();
+    }
+
+    match /staff/{staffId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create, update, delete: if canManageStaff() || isAdmin();
+    }
+
+    match /locations/{locationId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create, update, delete: if canManageDepartments() || isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create, update, delete: if canManageItems() || isAdmin();
+    }
+
+    // ── Inventory ───────────────────────────────────────────────────────────
+
+    match /items/{itemId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create, update: if canManageItems() || canEditFinance() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /assetCounter/{counterId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create, update: if canManageItems() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Activity & collaboration ────────────────────────────────────────────
+
+    match /history/{entryId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create: if isSignedIn() && isAccountActive()
+        && (canManageItems() || canEditFinance() || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    match /comments/{commentId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create: if isSignedIn()
+        && isAccountActive()
+        && request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && isAccountActive()
+        && (resource.data.authorId == request.auth.uid || isAdmin());
+    }
+
+    match /issues/{issueId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create: if isSignedIn() && isAccountActive();
+      allow update: if isSignedIn()
+        && isAccountActive()
+        && (canManageItems() || isAdmin()
+          || request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'updatedAt', 'resolvedAt', 'resolvedBy']));
+      allow delete: if isAdmin();
+    }
+
+    // ── Fleet (admin) ───────────────────────────────────────────────────────
+
+    match /vehicle_checkinout/{docId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /vehicle_maintenance/{docId} {
+      allow read: if isSignedIn() && isAccountActive();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── Deny everything else ────────────────────────────────────────────────
+
     match /{document=**} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if false;
     }
-
-    // Example: lock down permissionSets to admins only (requires custom claims)
-    // match /permissionSets/{id} {
-    //   allow read: if isSignedIn();
-    //   allow write: if request.auth.token.admin == true;
-    // }
   }
 }
-
-

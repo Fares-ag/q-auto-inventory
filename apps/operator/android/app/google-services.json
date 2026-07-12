@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "6001836083",
+    "project_id": "qauto-dam",
+    "storage_bucket": "qauto-dam.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:6001836083:android:399a01d88883bdf7c0e346",
+        "android_client_info": {
+          "package_name": "com.example.q_auto_inventory"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDBbDROBrgg3VjaSLpuBXvKMDwVGFNTG9k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:6001836083:android:fb84669ae0e831a7c0e346",
+        "android_client_info": {
+          "package_name": "com.example.q_auto_inventory_new"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDBbDROBrgg3VjaSLpuBXvKMDwVGFNTG9k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

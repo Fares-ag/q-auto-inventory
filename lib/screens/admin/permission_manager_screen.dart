@@ -62,7 +62,104 @@ class _PermissionManagerScreenState extends State<PermissionManagerScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Text('Manage Role Permissions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Manage Role Permissions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        final nameCtrl = TextEditingController();
+                        final descCtrl = TextEditingController();
+                        final result = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Create Permission Set'),
+                            content: SingleChildScrollView(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  TextField(
+                                    controller: nameCtrl,
+                                    decoration: const InputDecoration(labelText: 'Role Name'),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: descCtrl,
+                                    decoration: const InputDecoration(labelText: 'Description (optional)'),
+                                    maxLines: 2,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancel'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('Create'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (result == true && nameCtrl.text.trim().isNotEmpty) {
+                          try {
+                            await staffService.createPermissionSet(
+                              name: nameCtrl.text.trim(),
+                              description: descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
+                            );
+                            await _refresh();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Permission set created')),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed to create permission set: $e')),
+                              );
+                            }
+                          } finally {
+                            nameCtrl.dispose();
+                            descCtrl.dispose();
+                          }
+                        } else {
+                          nameCtrl.dispose();
+                          descCtrl.dispose();
+                        }
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text('Create Role'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      await staffService.ensureDefaultPermissionSets();
+                      await _refresh();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Default permission sets ensured (Finance, Operator, Admin)')),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to create default sets: $e')),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.auto_fix_high),
+                  label: const Text('Create Default Roles (Finance, Operator, Admin)'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 ...data.permissionSets.map((set) => Card(
                       child: ExpansionTile(

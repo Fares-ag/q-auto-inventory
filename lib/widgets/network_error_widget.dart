@@ -29,13 +29,13 @@ class NetworkErrorWidget extends StatelessWidget {
             Icon(
               Icons.wifi_off,
               size: 64,
-              color: Colors.orange[300],
+              color: Theme.of(context).colorScheme.secondary,
             ),
             const SizedBox(height: 16),
             Text(
               'Connection Error',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.orange[700],
+                    color: Theme.of(context).colorScheme.secondary,
                     fontWeight: FontWeight.bold,
                   ),
             ),

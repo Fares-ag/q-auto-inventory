@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../models/firestore_models.dart';
 import '../../services/firebase_services.dart';
+import '../../services/user_provisioning_service.dart';
 import '../../widgets/permission_guard.dart';
+import '../../widgets/provisioned_user_result_dialog.dart';
 import '../../widgets/skeleton_list.dart';
 
 class StaffManagementScreen extends StatefulWidget {
@@ -43,7 +45,8 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
     final departmentService = context.read<DepartmentService>();
     final permissionService = context.read<StaffService>();
 
-    final departmentsList = await departmentService.listDepartments(includeInactive: false);
+    final departmentsList =
+        await departmentService.listDepartments(includeInactive: false);
     final permissionList = await permissionService.listPermissionSets();
 
     final confirmed = await showDialog<bool>(
@@ -64,34 +67,41 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: deptId,
+                initialValue: deptId,
                 decoration: const InputDecoration(labelText: 'Department'),
                 items: departmentsList
-                    .map((d) => DropdownMenuItem(value: d.id, child: Text(d.name)))
+                    .map((d) =>
+                        DropdownMenuItem(value: d.id, child: Text(d.name)))
                     .toList(),
                 onChanged: (value) => deptId = value,
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: roleId,
+                initialValue: roleId,
                 decoration: const InputDecoration(labelText: 'Role'),
                 items: permissionList
-                    .map((p) => DropdownMenuItem(value: p.id, child: Text(p.name)))
+                    .map((p) =>
+                        DropdownMenuItem(value: p.id, child: Text(p.name)))
                     .toList(),
                 onChanged: (value) => roleId = value,
               ),
               const SizedBox(height: 12),
               CheckboxListTile(
                 value: createLogin,
-                onChanged: (value) => setState(() => createLogin = value ?? true),
+                onChanged: (value) =>
+                    setState(() => createLogin = value ?? true),
                 title: const Text('Create login in Users collection'),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Add')),
         ],
       ),
     );
@@ -104,35 +114,64 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
         final selectedDeptId = deptId;
         final selectedRoleId = roleId;
 
-        await svc.addStaffMember(
-          displayName: displayName,
-          email: email,
-          departmentId: selectedDeptId,
-          role: selectedRoleId,
-        );
         if (createLogin) {
-          await userSvc.createUser(
+          final result = await userSvc.createUser(
             email: email,
             displayName: displayName,
             departmentId: selectedDeptId,
             role: selectedRoleId,
           );
+          await svc.addStaffMember(
+            displayName: displayName,
+            email: email,
+            departmentId: selectedDeptId,
+            role: selectedRoleId,
+            authUid: result.uid,
+          );
+          await _refresh();
+          if (context.mounted) {
+            await showProvisionedUserResultDialog(
+              context,
+              result,
+              email: email,
+            );
+          }
+        } else {
+          await svc.addStaffMember(
+            displayName: displayName,
+            email: email,
+            departmentId: selectedDeptId,
+            role: selectedRoleId,
+          );
+          await _refresh();
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Staff member added')),
+            );
+          }
         }
-        await _refresh();
-        if (mounted) {
+      } on UserProvisioningException catch (e) {
+        if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Staff member added')),
+            SnackBar(content: Text(e.message)),
           );
         }
       } catch (e) {
-        if (mounted) {
+        if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed to add staff: $e')),
           );
         }
       } finally {
-        if (mounted) setState(() => _adding = false);
+        if (context.mounted) setState(() => _adding = false);
+        // Dispose controllers after use
+        nameCtrl.dispose();
+        emailCtrl.dispose();
       }
+    } else {
+      // Dispose controllers if dialog was cancelled
+      nameCtrl.dispose();
+      emailCtrl.dispose();
     }
   }
 
@@ -144,77 +183,90 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
       body: StaffManagementOnly(
         showError: true,
         child: FutureBuilder<List<StaffMember>>(
-        future: _staffFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: SkeletonList(itemCount: 10, itemHeight: 72),
-            );
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Failed to load staff: ${snapshot.error}'));
-          }
-          final staff = snapshot.data ?? const [];
-          if (staff.isEmpty) {
-            return const Center(child: Text('No staff available.'));
-          }
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: staff.length,
-              itemBuilder: (context, index) {
-                final member = staff[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  child: ListTile(
-                    leading: CircleAvatar(child: Text(member.displayName.isNotEmpty ? member.displayName[0].toUpperCase() : '?')),
-                    title: Text(member.displayName),
-                    subtitle: Text('Email: ${member.email}\nDepartment: ${member.departmentId ?? 'N/A'}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Switch(
-                          value: member.isActive,
-                          onChanged: (value) async {
-                            await staffService.setStaffActive(member.id, value);
-                            await _refresh();
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Remove Staff Member'),
-                                content: Text('Remove ${member.displayName}?'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                                  ElevatedButton(
-                                    onPressed: () => Navigator.pop(context, true),
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                                    child: const Text('Remove'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirm == true) {
-                              await staffService.deleteStaff(member.id);
+          future: _staffFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.all(16),
+                child: SkeletonList(itemCount: 10, itemHeight: 72),
+              );
+            }
+            if (snapshot.hasError) {
+              return Center(
+                  child: Text('Failed to load staff: ${snapshot.error}'));
+            }
+            final staff = snapshot.data ?? const [];
+            if (staff.isEmpty) {
+              return const Center(child: Text('No staff available.'));
+            }
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: staff.length,
+                itemBuilder: (context, index) {
+                  final member = staff[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                          child: Text(member.displayName.isNotEmpty
+                              ? member.displayName[0].toUpperCase()
+                              : '?')),
+                      title: Text(member.displayName),
+                      subtitle: Text(
+                          'Email: ${member.email}\nDepartment: ${member.departmentId ?? 'N/A'}'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Switch(
+                            value: member.isActive,
+                            onChanged: (value) async {
+                              await staffService.setStaffActive(
+                                  member.id, value);
                               await _refresh();
-                            }
-                          },
-                        ),
-                      ],
+                            },
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.delete_outline,
+                                color: Theme.of(context).colorScheme.error),
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Remove Staff Member'),
+                                  content:
+                                      Text('Remove ${member.displayName}?'),
+                                  actions: [
+                                    TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, false),
+                                        child: const Text('Cancel')),
+                                    ElevatedButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
+                                      style: ElevatedButton.styleFrom(
+                                          backgroundColor: Theme.of(context).colorScheme.error),
+                                      child: const Text('Remove'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                await staffService.deleteStaff(member.id);
+                                await _refresh();
+                              }
+                            },
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
-          );
-        },
-      ),
+                  );
+                },
+              ),
+            );
+          },
+        ),
       ),
       floatingActionButton: StaffManagementOnly(
         child: FloatingActionButton(

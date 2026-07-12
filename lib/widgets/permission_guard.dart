@@ -1,11 +1,13 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../services/permission_service.dart';
+import '../providers/permission_providers.dart';
+import '../providers/service_providers.dart';
 
-/// Widget that shows child only if user has required permission
-class PermissionGuard extends StatelessWidget {
+/// Inline permission guard — shows [child] only if the current user has
+/// [permission]. Uses cached Riverpod [currentUserDataProvider] so repeated
+/// guards on the same screen share a single Firestore fetch.
+class PermissionGuard extends ConsumerWidget {
   const PermissionGuard({
     super.key,
     required this.permission,
@@ -20,33 +22,35 @@ class PermissionGuard extends StatelessWidget {
   final bool showError;
 
   @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return fallback ?? const SizedBox.shrink();
-    }
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userData = ref.watch(currentUserDataProvider);
 
-    return FutureBuilder<bool>(
-      future: _checkPermission(context, user.uid, user.email),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox.shrink();
-        }
+    return userData.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => fallback ?? const SizedBox.shrink(),
+      data: (user) {
+        if (user == null) return fallback ?? const SizedBox.shrink();
 
-        final hasPermission = snapshot.data ?? false;
+        final permSvc = ref.read(permissionServiceProvider);
+        final isAdmin = permSvc.hasPermission(user.permissions, 'admin');
 
-        if (hasPermission) {
-          return child;
-        }
+        final hasAccess = isAdmin ||
+            permSvc.hasPermission(user.permissions, permission);
 
-        if (showError && context.mounted) {
+        if (hasAccess) return child;
+
+        if (showError) {
           return Padding(
             padding: const EdgeInsets.all(16),
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.lock_outline, size: 48, color: Colors.grey),
+                  Icon(
+                    Icons.lock_outline_rounded,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Access Denied',
@@ -55,7 +59,9 @@ class PermissionGuard extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     'You do not have permission to access this feature.',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -68,40 +74,10 @@ class PermissionGuard extends StatelessWidget {
       },
     );
   }
-
-  Future<bool> _checkPermission(
-    BuildContext context,
-    String userId,
-    String? email,
-  ) async {
-    try {
-      final permissionService = context.read<PermissionService>();
-      final isAdminUser = (await permissionService.isAdmin(userId)) ||
-          (email?.toLowerCase() == 'super@admin.com');
-
-      // Admin routes: accept role-based admin or super email
-      if (permission == 'admin' && isAdminUser) {
-        return true;
-      }
-
-      final userPermissions =
-          await permissionService.getUserPermissions(userId);
-
-      // Treat 'admin' permission as superuser for all guards
-      if (permissionService.hasPermission(userPermissions, 'admin') ||
-          isAdminUser) {
-        return true;
-      }
-
-      return permissionService.hasPermission(userPermissions, permission);
-    } catch (e) {
-      debugPrint('Error checking permission: $e');
-      return false;
-    }
-  }
 }
 
-/// Widget that conditionally shows content based on admin status
+// ── Convenience wrappers ──────────────────────────────────────────────────────
+
 class AdminOnly extends StatelessWidget {
   const AdminOnly({
     super.key,
@@ -115,17 +91,14 @@ class AdminOnly extends StatelessWidget {
   final bool showError;
 
   @override
-  Widget build(BuildContext context) {
-    return PermissionGuard(
-      permission: 'admin',
-      fallback: fallback,
-      showError: showError,
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) => PermissionGuard(
+        permission: 'admin',
+        fallback: fallback,
+        showError: showError,
+        child: child,
+      );
 }
 
-/// Widget that conditionally shows content based on item management permission
 class ItemManagementOnly extends StatelessWidget {
   const ItemManagementOnly({
     super.key,
@@ -139,17 +112,14 @@ class ItemManagementOnly extends StatelessWidget {
   final bool showError;
 
   @override
-  Widget build(BuildContext context) {
-    return PermissionGuard(
-      permission: 'manage_items',
-      fallback: fallback,
-      showError: showError,
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) => PermissionGuard(
+        permission: 'manage_items',
+        fallback: fallback,
+        showError: showError,
+        child: child,
+      );
 }
 
-/// Widget that conditionally shows content based on department management permission
 class DepartmentManagementOnly extends StatelessWidget {
   const DepartmentManagementOnly({
     super.key,
@@ -163,17 +133,14 @@ class DepartmentManagementOnly extends StatelessWidget {
   final bool showError;
 
   @override
-  Widget build(BuildContext context) {
-    return PermissionGuard(
-      permission: 'manage_departments',
-      fallback: fallback,
-      showError: showError,
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) => PermissionGuard(
+        permission: 'manage_departments',
+        fallback: fallback,
+        showError: showError,
+        child: child,
+      );
 }
 
-/// Widget that conditionally shows content based on staff management permission
 class StaffManagementOnly extends StatelessWidget {
   const StaffManagementOnly({
     super.key,
@@ -187,17 +154,14 @@ class StaffManagementOnly extends StatelessWidget {
   final bool showError;
 
   @override
-  Widget build(BuildContext context) {
-    return PermissionGuard(
-      permission: 'manage_staff',
-      fallback: fallback,
-      showError: showError,
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) => PermissionGuard(
+        permission: 'manage_staff',
+        fallback: fallback,
+        showError: showError,
+        child: child,
+      );
 }
 
-/// Widget that conditionally shows content based on reports permission
 class ReportsOnly extends StatelessWidget {
   const ReportsOnly({
     super.key,
@@ -211,12 +175,10 @@ class ReportsOnly extends StatelessWidget {
   final bool showError;
 
   @override
-  Widget build(BuildContext context) {
-    return PermissionGuard(
-      permission: 'view_reports',
-      fallback: fallback,
-      showError: showError,
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) => PermissionGuard(
+        permission: 'view_reports',
+        fallback: fallback,
+        showError: showError,
+        child: child,
+      );
 }

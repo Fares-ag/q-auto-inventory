@@ -24,8 +24,8 @@ class ConfirmationDialog {
             onPressed: () => Navigator.pop(context, true),
             style: isDestructive
                 ? FilledButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   )
                 : null,
             child: Text(confirmText),

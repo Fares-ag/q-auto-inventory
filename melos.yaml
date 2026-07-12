@@ -1,0 +1,73 @@
+name: q_auto_inventory_workspace
+
+# Dart native workspace: packages are listed in root pubspec.yaml workspace: field.
+# Run `dart run melos <command>` from the repo root (melos is a dev_dependency).
+packages:
+  - .
+  - apps/*
+
+command:
+  bootstrap:
+    # Install deps for all packages in the workspace.
+    usePubspecOverrides: true
+
+scripts:
+  # ── Dev servers ──────────────────────────────────────────────────────────────
+  run:operator:
+    description: Run the Operator app in Chrome
+    run: flutter run -d chrome --target lib/main.dart
+    packageFilters:
+      name: q_auto_inventory_operator
+
+  # Nested apps/ do not ship android/ — Dart workspace + Flutter tooling builds from the
+  # repo-root android/ folder. This hops to the root then targets operator's entrypoint.
+  operator_android:
+    description: Run Operator on a connected Android device (repo-root android + Firebase)
+    run: cd ../.. && flutter run -d android --target apps/operator/lib/main.dart
+    packageFilters:
+      name: q_auto_inventory_operator
+
+  run:finance:
+    description: Run the Finance app in Chrome
+    run: flutter run -d chrome --target lib/main.dart
+    packageFilters:
+      name: q_auto_inventory_finance
+
+  run:admin:
+    description: Run the Super Admin app in Chrome
+    run: flutter run -d chrome --target lib/main.dart
+    packageFilters:
+      name: q_auto_inventory_super_admin
+
+  # ── Release web builds ───────────────────────────────────────────────────────
+  build:operator:
+    description: Build operator web app for release
+    run: flutter build web --release
+    packageFilters:
+      name: q_auto_inventory_operator
+
+  build:finance:
+    description: Build finance web app for release
+    run: flutter build web --release
+    packageFilters:
+      name: q_auto_inventory_finance
+
+  build:admin:
+    description: Build super admin web app for release
+    run: flutter build web --release
+    packageFilters:
+      name: q_auto_inventory_super_admin
+
+  build:all:
+    description: Build all three apps for release
+    run: flutter build web --release
+    packageFilters:
+      scope:
+        - q_auto_inventory_operator
+        - q_auto_inventory_finance
+        - q_auto_inventory_super_admin
+
+  # ── Analysis ─────────────────────────────────────────────────────────────────
+  analyze:
+    run: flutter analyze --no-fatal-infos
+    description: Analyze all packages

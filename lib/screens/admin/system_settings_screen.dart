@@ -51,7 +51,7 @@ class _SystemSettingsScreenState extends State<SystemSettingsScreen> {
     );
     await svc.updateSettings(newSettings);
     await _load();
-    if (mounted) {
+    if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Settings saved')),
       );

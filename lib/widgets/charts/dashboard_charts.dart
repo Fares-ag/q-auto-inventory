@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import '../../models/firestore_models.dart';
+import '../../theme/app_theme.dart';
 
 class DashboardCharts extends StatelessWidget {
   const DashboardCharts({
@@ -47,13 +48,7 @@ class _StatusChart extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    const colors = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.red,
-      Colors.purple,
-    ];
+    final colors = AppTheme.chartColors;
 
     return Card(
       child: Padding(
@@ -66,28 +61,36 @@ class _StatusChart extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              height: 200,
-              child: PieChart(
-                PieChartData(
-                  sections: statusCounts.entries.toList().asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final statusEntry = entry.value;
-                    final percentage = (statusEntry.value / items.length) * 100;
-                    return PieChartSectionData(
-                      value: statusEntry.value.toDouble(),
-                      title: '${statusEntry.key}\n${percentage.toStringAsFixed(1)}%',
-                      color: colors[index % colors.length],
-                      radius: 60,
-                      titleStyle: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    );
-                  }).toList(),
-                  sectionsSpace: 2,
-                  centerSpaceRadius: 40,
+            RepaintBoundary(
+              child: SizedBox(
+                height: 200,
+                child: PieChart(
+                  PieChartData(
+                    sections: statusCounts.entries
+                        .toList()
+                        .asMap()
+                        .entries
+                        .map((entry) {
+                      final index = entry.key;
+                      final statusEntry = entry.value;
+                      final percentage =
+                          (statusEntry.value / items.length) * 100;
+                      return PieChartSectionData(
+                        value: statusEntry.value.toDouble(),
+                        title:
+                            '${statusEntry.key}\n${percentage.toStringAsFixed(1)}%',
+                        color: colors[index % colors.length],
+                        radius: 60,
+                        titleStyle: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      );
+                    }).toList(),
+                    sectionsSpace: 2,
+                    centerSpaceRadius: 40,
+                  ),
                 ),
               ),
             ),
@@ -109,15 +112,13 @@ class _DepartmentChart extends StatelessWidget {
 
   Map<String, int> _getDepartmentCounts() {
     final counts = <String, int>{};
+    // Create lookup map for O(1) access instead of O(n) firstWhere
+    final deptMap = {for (var d in departments) d.id: d.name};
     for (final item in items) {
       final deptId = item.departmentId;
       if (deptId.isNotEmpty) {
-        // Use lookup map for better performance
-        final dept = departments.firstWhere(
-          (d) => d.id == deptId,
-          orElse: () => Department(id: deptId, name: deptId),
-        );
-        counts[dept.name] = (counts[dept.name] ?? 0) + 1;
+        final deptName = deptMap[deptId] ?? deptId;
+        counts[deptName] = (counts[deptName] ?? 0) + 1;
       }
     }
     return counts;
@@ -144,72 +145,74 @@ class _DepartmentChart extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              height: 200,
-              child: BarChart(
-                BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  maxY: sortedEntries.first.value.toDouble() * 1.2,
-                  barTouchData: BarTouchData(
-                    enabled: true,
-                    touchTooltipData: BarTouchTooltipData(
-                      tooltipBgColor: Colors.grey[800]!,
-                    ),
-                  ),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          final index = value.toInt();
-                          if (index >= 0 && index < sortedEntries.length) {
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                sortedEntries[index].key.length > 8
-                                    ? '${sortedEntries[index].key.substring(0, 8)}...'
-                                    : sortedEntries[index].key,
-                                style: const TextStyle(fontSize: 10),
-                              ),
-                            );
-                          }
-                          return const Text('');
-                        },
+            RepaintBoundary(
+              child: SizedBox(
+                height: 200,
+                child: BarChart(
+                  BarChartData(
+                    alignment: BarChartAlignment.spaceAround,
+                    maxY: sortedEntries.first.value.toDouble() * 1.2,
+                    barTouchData: BarTouchData(
+                      enabled: true,
+                      touchTooltipData: BarTouchTooltipData(
+                        tooltipBgColor: Theme.of(context).colorScheme.primary,
                       ),
                     ),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                      ),
-                    ),
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                  ),
-                  gridData: FlGridData(show: false),
-                  borderData: FlBorderData(show: false),
-                  barGroups: sortedEntries.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final deptEntry = entry.value;
-                    return BarChartGroupData(
-                      x: index,
-                      barRods: [
-                        BarChartRodData(
-                          toY: deptEntry.value.toDouble(),
-                          color: Colors.blue,
-                          width: 20,
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(4),
-                          ),
+                    titlesData: FlTitlesData(
+                      show: true,
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          getTitlesWidget: (value, meta) {
+                            final index = value.toInt();
+                            if (index >= 0 && index < sortedEntries.length) {
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  sortedEntries[index].key.length > 8
+                                      ? '${sortedEntries[index].key.substring(0, 8)}...'
+                                      : sortedEntries[index].key,
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                              );
+                            }
+                            return const Text('');
+                          },
                         ),
-                      ],
-                    );
-                  }).toList(),
+                      ),
+                      leftTitles: const AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 40,
+                        ),
+                      ),
+                      topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                    ),
+                    gridData: const FlGridData(show: false),
+                    borderData: FlBorderData(show: false),
+                    barGroups: sortedEntries.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final deptEntry = entry.value;
+                      return BarChartGroupData(
+                        x: index,
+                        barRods: [
+                          BarChartRodData(
+                            toY: deptEntry.value.toDouble(),
+                            color: Theme.of(context).colorScheme.primary,
+                            width: 20,
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(4),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
             ),
@@ -219,4 +222,3 @@ class _DepartmentChart extends StatelessWidget {
     );
   }
 }
-

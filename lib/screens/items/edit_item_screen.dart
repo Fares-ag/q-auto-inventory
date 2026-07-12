@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/firestore_models.dart';
 import '../../services/firebase_services.dart';
+import '../../services/permission_service.dart';
+import 'finance_edit_item_screen.dart';
 
 class EditItemScreen extends StatefulWidget {
   const EditItemScreen({super.key, required this.item});
@@ -16,17 +19,22 @@ class EditItemScreen extends StatefulWidget {
 class _EditItemScreenState extends State<EditItemScreen> {
   late final _formKey = GlobalKey<FormState>();
   late final _nameController = TextEditingController(text: widget.item.name);
-  late final _descriptionController = TextEditingController(text: widget.item.description ?? '');
-  late final _quantityController = TextEditingController(text: widget.item.quantity?.toString() ?? '');
-  late final _assetIdController = TextEditingController(text: widget.item.assetId);
-  
+  late final _descriptionController =
+      TextEditingController(text: widget.item.description ?? '');
+  late final _quantityController =
+      TextEditingController(text: widget.item.quantity?.toString() ?? '');
+  late final _assetIdController =
+      TextEditingController(text: widget.item.assetId);
+  late final _assetNumberController =
+      TextEditingController(text: widget.item.assetNumber ?? '');
+
   String? _selectedCategoryId;
   String? _selectedDepartmentId;
   String? _selectedLocationId;
   String? _selectedStatus;
   DateTime? _purchaseDate;
   DateTime? _warrantyExpiry;
-  
+
   List<Category> _categories = [];
   List<Department> _departments = [];
   List<Location> _locations = [];
@@ -41,17 +49,41 @@ class _EditItemScreenState extends State<EditItemScreen> {
     _selectedStatus = widget.item.status;
     _purchaseDate = widget.item.purchaseDate;
     _warrantyExpiry = widget.item.warrantyExpiry;
+    _checkUserRole();
     _loadDropdownData();
+  }
+
+  Future<void> _checkUserRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final permissionService = context.read<PermissionService>();
+    final isFinance = await permissionService.isFinance(user.uid);
+    final isAdmin = await permissionService.isAdmin(user.uid);
+
+    // If finance-only user, redirect to finance edit screen
+    if (isFinance && !isAdmin && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => FinanceEditItemScreen(item: widget.item),
+            ),
+          );
+        }
+      });
+    }
   }
 
   Future<void> _loadDropdownData() async {
     final catalog = context.read<CatalogService>();
     final deptService = context.read<DepartmentService>();
-    
+
     final categories = await catalog.listCategories();
-    final departments = await deptService.listDepartments(includeInactive: false);
+    final departments =
+        await deptService.listDepartments(includeInactive: false);
     final locations = await catalog.listLocations();
-    
+
     setState(() {
       _categories = categories;
       _departments = departments;
@@ -62,7 +94,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
   Future<void> _selectDate(BuildContext context, bool isPurchase) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: isPurchase 
+      initialDate: isPurchase
           ? (_purchaseDate ?? DateTime.now())
           : (_warrantyExpiry ?? DateTime.now()),
       firstDate: DateTime(2000),
@@ -98,7 +130,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
 
     try {
       final catalog = context.read<CatalogService>();
-      
+
       final updates = <String, dynamic>{
         'assetId': _assetIdController.text.trim(),
         'name': _nameController.text.trim(),
@@ -110,28 +142,28 @@ class _EditItemScreenState extends State<EditItemScreen> {
           'quantity': int.tryParse(_quantityController.text.trim()),
         if (_selectedStatus != null) 'status': _selectedStatus,
         if (_selectedLocationId != null) 'locationId': _selectedLocationId,
-        if (_purchaseDate != null)
-          'purchaseDate': _purchaseDate,
-        if (_warrantyExpiry != null)
-          'warrantyExpiry': _warrantyExpiry,
+        if (_purchaseDate != null) 'purchaseDate': _purchaseDate,
+        if (_warrantyExpiry != null) 'warrantyExpiry': _warrantyExpiry,
+        if (_assetNumberController.text.trim().isNotEmpty)
+          'assetNumber': _assetNumberController.text.trim(),
       };
 
       await catalog.updateItem(widget.item.id, updates);
-      
-      if (mounted) {
+
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Item updated successfully')),
         );
         Navigator.of(context).pop(true);
       }
     } catch (e) {
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error updating item: $e')),
         );
       }
     } finally {
-      if (mounted) {
+      if (context.mounted) {
         setState(() => _isLoading = false);
       }
     }
@@ -143,6 +175,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
     _descriptionController.dispose();
     _quantityController.dispose();
     _assetIdController.dispose();
+    _assetNumberController.dispose();
     super.dispose();
   }
 
@@ -188,7 +221,19 @@ class _EditItemScreenState extends State<EditItemScreen> {
               },
             ),
             const SizedBox(height: 16),
-            
+
+            // Asset Number (optional)
+            TextFormField(
+              controller: _assetNumberController,
+              decoration: const InputDecoration(
+                labelText: 'Asset Number',
+                hintText: 'Optional asset number',
+                border: OutlineInputBorder(),
+                helperText: 'Optional: Additional asset identifier',
+              ),
+            ),
+            const SizedBox(height: 16),
+
             // Name
             TextFormField(
               controller: _nameController,
@@ -204,7 +249,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
               },
             ),
             const SizedBox(height: 16),
-            
+
             // Description
             TextFormField(
               controller: _descriptionController,
@@ -215,10 +260,10 @@ class _EditItemScreenState extends State<EditItemScreen> {
               maxLines: 3,
             ),
             const SizedBox(height: 16),
-            
+
             // Category
             DropdownButtonFormField<String>(
-              value: _selectedCategoryId,
+              initialValue: _selectedCategoryId,
               decoration: const InputDecoration(
                 labelText: 'Category *',
                 border: OutlineInputBorder(),
@@ -239,10 +284,10 @@ class _EditItemScreenState extends State<EditItemScreen> {
               },
             ),
             const SizedBox(height: 16),
-            
+
             // Department
             DropdownButtonFormField<String>(
-              value: _selectedDepartmentId,
+              initialValue: _selectedDepartmentId,
               decoration: const InputDecoration(
                 labelText: 'Department *',
                 border: OutlineInputBorder(),
@@ -254,7 +299,8 @@ class _EditItemScreenState extends State<EditItemScreen> {
                         child: Text(dept.name),
                       ))
                   .toList(),
-              onChanged: (value) => setState(() => _selectedDepartmentId = value),
+              onChanged: (value) =>
+                  setState(() => _selectedDepartmentId = value),
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Please select a department';
@@ -263,10 +309,10 @@ class _EditItemScreenState extends State<EditItemScreen> {
               },
             ),
             const SizedBox(height: 16),
-            
+
             // Location
             DropdownButtonFormField<String>(
-              value: _selectedLocationId,
+              initialValue: _selectedLocationId,
               decoration: const InputDecoration(
                 labelText: 'Location',
                 border: OutlineInputBorder(),
@@ -281,7 +327,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
               onChanged: (value) => setState(() => _selectedLocationId = value),
             ),
             const SizedBox(height: 16),
-            
+
             // Quantity
             TextFormField(
               controller: _quantityController,
@@ -292,10 +338,10 @@ class _EditItemScreenState extends State<EditItemScreen> {
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 16),
-            
+
             // Status
             DropdownButtonFormField<String>(
-              value: _selectedStatus,
+              initialValue: _selectedStatus,
               decoration: const InputDecoration(
                 labelText: 'Status',
                 border: OutlineInputBorder(),
@@ -308,7 +354,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
               onChanged: (value) => setState(() => _selectedStatus = value),
             ),
             const SizedBox(height: 16),
-            
+
             // Purchase Date
             ListTile(
               title: const Text('Purchase Date'),
@@ -331,7 +377,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            
+
             // Warranty Expiry
             ListTile(
               title: const Text('Warranty Expiry'),
@@ -354,7 +400,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            
+
             // Save Button
             FilledButton(
               onPressed: _isLoading ? null : _saveItem,
@@ -369,4 +415,3 @@ class _EditItemScreenState extends State<EditItemScreen> {
     );
   }
 }
-

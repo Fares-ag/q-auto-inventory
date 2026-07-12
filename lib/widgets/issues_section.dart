@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/firestore_models.dart';
+import '../theme/app_theme.dart';
 import '../services/firebase_services.dart';
 import '../utils/date_formatter.dart';
 import 'empty_state.dart';
@@ -135,51 +136,63 @@ class _IssuesSectionState extends State<IssuesSection> {
               );
             }
             return Column(
-              children: issues.map((issue) => Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                color: issue.status == 'open' ? Colors.red[50] : Colors.green[50],
-                child: ListTile(
-                  leading: Icon(
-                    issue.status == 'open' ? Icons.warning : Icons.check_circle,
-                    color: issue.status == 'open' ? Colors.red : Colors.green,
-                  ),
-                  title: Text(issue.title),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (issue.description != null && issue.description!.isNotEmpty)
-                        Text(issue.description!),
-                      const SizedBox(height: 4),
-                      Row(
+              children: issues.map((issue) {
+                final isOpen = issue.status == 'open';
+                final errorColor = Theme.of(context).colorScheme.error;
+                final successColor = AppTheme.success;
+                return RepaintBoundary(
+                  child: Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    color: isOpen 
+                        ? errorColor.withOpacity(0.08) 
+                        : successColor.withOpacity(0.08),
+                    child: ListTile(
+                      leading: Icon(
+                        isOpen ? Icons.warning : Icons.check_circle,
+                        color: isOpen ? errorColor : successColor,
+                      ),
+                      title: Text(issue.title),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Chip(
-                            label: Text(issue.status.toUpperCase()),
-                            backgroundColor: issue.status == 'open' ? Colors.red[100] : Colors.green[100],
-                            labelStyle: TextStyle(
-                              fontSize: 10,
-                              color: issue.status == 'open' ? Colors.red[900] : Colors.green[900],
-                            ),
+                          if (issue.description != null && issue.description!.isNotEmpty)
+                            Text(issue.description!),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Chip(
+                                label: Text(issue.status.toUpperCase()),
+                                backgroundColor: isOpen 
+                                    ? errorColor.withOpacity(0.15) 
+                                    : successColor.withOpacity(0.15),
+                                labelStyle: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: isOpen ? errorColor : successColor,
+                                ),
+                              ),
+                              if (issue.createdAt != null) ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  DateFormatter.formatRelative(issue.createdAt),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ],
                           ),
-                          if (issue.createdAt != null) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              DateFormatter.formatRelative(issue.createdAt),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
                         ],
                       ),
-                    ],
+                      trailing: isOpen
+                          ? IconButton(
+                              icon: Icon(Icons.check_circle, color: successColor),
+                              tooltip: 'Resolve Issue',
+                              onPressed: () => _resolveIssue(issue.id),
+                            )
+                          : null,
+                    ),
                   ),
-                  trailing: issue.status == 'open'
-                      ? IconButton(
-                          icon: const Icon(Icons.check_circle, color: Colors.green),
-                          tooltip: 'Resolve Issue',
-                          onPressed: () => _resolveIssue(issue.id),
-                        )
-                      : null,
-                ),
-              )).toList(),
+                );
+              }).toList(),
             );
           },
         ),

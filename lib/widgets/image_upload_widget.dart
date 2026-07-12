@@ -1,10 +1,21 @@
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../services/firebase_services.dart';
 import '../services/image_upload_service.dart';
+
+// Shared cache manager for images
+final _imageCacheManager = CacheManager(
+  Config(
+    'item_images',
+    stalePeriod: const Duration(days: 7),
+    maxNrOfCacheObjects: 200,
+  ),
+);
 
 class ImageUploadWidget extends StatefulWidget {
   const ImageUploadWidget({
@@ -86,10 +97,19 @@ class _ImageUploadWidgetState extends State<ImageUploadWidget> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                widget.currentImageUrl!,
+              child: CachedNetworkImage(
+                imageUrl: widget.currentImageUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
+                cacheManager: _imageCacheManager,
+                httpHeaders: const {
+                  'Cache-Control': 'max-age=86400',
+                },
+                placeholder: (context, url) => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                errorWidget: (context, url, error) => const Icon(Icons.broken_image),
+                fadeInDuration: const Duration(milliseconds: 200),
+                fadeOutDuration: const Duration(milliseconds: 100),
               ),
             ),
           )

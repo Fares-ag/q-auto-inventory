@@ -79,7 +79,7 @@ class _DepartmentManagementScreenState extends State<DepartmentManagementScreen>
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
             child: const Text('Delete'),
           ),
         ],
@@ -122,7 +122,7 @@ class _DepartmentManagementScreenState extends State<DepartmentManagementScreen>
               final department = departments[index];
               return ListTile(
                 title: Text(department.name),
-                subtitle: Text(department.isActive ? 'Active' : 'Inactive', style: TextStyle(color: department.isActive ? Colors.green : Colors.red)),
+                subtitle: Text(department.isActive ? 'Active' : 'Inactive', style: TextStyle(color: department.isActive ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error)),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -136,7 +136,7 @@ class _DepartmentManagementScreenState extends State<DepartmentManagementScreen>
                       onPressed: () => _showDepartmentDialog(context, department: department),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
                       onPressed: () => _confirmDelete(context, department),
                     ),
                   ],

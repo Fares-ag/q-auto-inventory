@@ -83,31 +83,33 @@ class _CommentsSectionState extends State<CommentsSection> {
                   );
                 }
                 return Column(
-                  children: comments.map((comment) => Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        child: Text(comment.authorId.isNotEmpty ? comment.authorId[0].toUpperCase() : '?'),
-                      ),
-                      title: Text(comment.authorId),
-                      subtitle: Text(comment.content),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            DateFormatter.formatRelative(comment.createdAt),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          if (comment.createdAt != null)
+                  children: comments.map((comment) => RepaintBoundary(
+                    child: Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          child: Text(comment.authorId.isNotEmpty ? comment.authorId[0].toUpperCase() : '?'),
+                        ),
+                        title: Text(comment.authorId),
+                        subtitle: Text(comment.content),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
                             Text(
-                              DateFormatter.formatTime(comment.createdAt),
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    fontSize: 10,
-                                    color: Colors.grey[600],
-                                  ),
+                              DateFormatter.formatRelative(comment.createdAt),
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
-                        ],
+                            if (comment.createdAt != null)
+                              Text(
+                                DateFormatter.formatTime(comment.createdAt),
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      fontSize: 10,
+                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                                    ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   )).toList(),

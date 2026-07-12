@@ -6,6 +6,7 @@ import '../screens/admin/category_management_screen.dart';
 import '../screens/admin/department_management_screen.dart';
 import '../screens/admin/permission_manager_screen.dart';
 import '../screens/admin/staff_management_screen.dart';
+import '../screens/admin/user_management_screen.dart';
 import '../screens/admin/excel_import_screen.dart';
 import '../screens/admin/super_admin_dashboard_screen.dart';
 import '../screens/admin/data_audit_screen.dart';
@@ -13,6 +14,7 @@ import '../screens/admin/locations_management_screen.dart';
 import '../screens/admin/system_settings_screen.dart';
 import '../screens/admin/vehicle_checkinout_screen.dart';
 import '../screens/admin/vehicle_maintenance_screen.dart';
+import '../screens/admin/analytics_screen.dart';
 import '../screens/approvals/approval_queue_screen.dart';
 import '../screens/home/root_shell.dart';
 import '../screens/items/add_item_screen.dart';
@@ -36,6 +38,7 @@ class AppRouter {
   static const String categoryManagementRoute = '/admin/categories';
   static const String permissionManagerRoute = '/admin/permissions';
   static const String staffManagementRoute = '/admin/staff';
+  static const String userManagementRoute = '/admin/users';
   static const String reportsRoute = '/reports';
   static const String bulkQrRoute = BulkQrPrintScreen.routeName;
   static const String loginRoute = '/login';
@@ -45,6 +48,7 @@ class AppRouter {
   static const String systemSettingsRoute = '/admin/system-settings';
   static const String vehicleCheckInOutRoute = '/admin/vehicle-checkouts';
   static const String vehicleMaintenanceRoute = '/admin/vehicle-maintenance';
+  static const String analyticsRoute = '/admin/analytics';
   static const String settingsRoute = '/settings';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
@@ -54,7 +58,10 @@ class AppRouter {
       case itemsRoute:
         return MaterialPageRoute(builder: (_) => const ItemsScreen());
       case addItemRoute:
-        return MaterialPageRoute(builder: (_) => const AddItemScreen());
+        return _guardedRoute(
+          builder: (_) => const AddItemScreen(),
+          permission: 'manage_items',
+        );
       case adminRoute:
         return _guardedRoute(
           builder: (_) => const AdminDashboardScreen(),
@@ -95,6 +102,11 @@ class AppRouter {
           builder: (_) => const VehicleMaintenanceScreen(),
           permission: 'admin',
         );
+      case analyticsRoute:
+        return _guardedRoute(
+          builder: (_) => const AnalyticsScreen(),
+          permission: 'admin',
+        );
       case departmentManagementRoute:
         return _guardedRoute(
           builder: (_) => const DepartmentManagementScreen(),
@@ -115,6 +127,11 @@ class AppRouter {
           builder: (_) => const StaffManagementScreen(),
           permission: 'manage_staff',
         );
+      case userManagementRoute:
+        return _guardedRoute(
+          builder: (_) => const UserManagementScreen(),
+          permission: 'admin',
+        );
       case reportsRoute:
         return _guardedRoute(
           builder: (_) => const ReportsHubScreen(),
@@ -126,7 +143,10 @@ class AppRouter {
           permission: 'manage_items',
         );
       case bulkQrRoute:
-        return MaterialPageRoute(builder: (_) => const BulkQrPrintScreen());
+        return _guardedRoute(
+          builder: (_) => const BulkQrPrintScreen(),
+          permission: 'manage_items',
+        );
       case loginRoute:
         return MaterialPageRoute(builder: (_) => const LoginScreen());
       case itemDetailsRoute:

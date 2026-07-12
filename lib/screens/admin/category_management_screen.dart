@@ -97,6 +97,15 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
         await service.updateCategory(updated);
       }
       setState(_reloadCategories);
+      // Dispose controllers after use
+      nameController.dispose();
+      descController.dispose();
+      isActive.dispose();
+    } else {
+      // Dispose controllers if dialog was cancelled
+      nameController.dispose();
+      descController.dispose();
+      isActive.dispose();
     }
   }
 
@@ -111,7 +120,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
             child: const Text('Delete'),
           ),
         ],
@@ -197,20 +206,20 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: Colors.green.withOpacity(0.15),
-                          child: const Icon(Icons.category, color: Colors.green),
+                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                          child: Icon(Icons.category, color: Theme.of(context).colorScheme.primary),
                         ),
                         title: Text(category.name),
-                        subtitle: Text(category.isActive ? 'Active' : 'Inactive', style: TextStyle(color: category.isActive ? Colors.green : Colors.red)),
+                        subtitle: Text(category.isActive ? 'Active' : 'Inactive', style: TextStyle(color: category.isActive ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error)),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              icon: Icon(Icons.edit, color: Theme.of(context).colorScheme.primary),
                               onPressed: () => _showCategoryDialog(category: category),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
+                              icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
                               onPressed: () => _deleteCategory(category),
                             ),
                           ],

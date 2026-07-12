@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' hide Category;
 
 import '../models/firestore_models.dart';
+import '../utils/asset_id_suggestion.dart';
 import 'cache_service.dart';
 import 'firebase_services.dart';
 
@@ -45,8 +46,19 @@ class CachedCatalogService {
       searchQuery: searchQuery,
     );
 
-    // Cache the results
-    _cache.set(cacheKey, items, ttl: const Duration(minutes: 2));
+    // Persist the unfiltered "all" list so cold-start hydration can reuse it.
+    // Filtered slices are kept in memory only — they're cheap to recompute.
+    if (departmentId == null && categoryId == null) {
+      _cache.setAndPersist<InventoryItem>(
+        cacheKey,
+        items,
+        (i) => i.toJson(),
+        (i) => i.id,
+        ttl: const Duration(minutes: 5),
+      );
+    } else {
+      _cache.set(cacheKey, items, ttl: const Duration(minutes: 5));
+    }
     return items;
   }
 
@@ -76,7 +88,8 @@ class CachedCatalogService {
     }
 
     final categories = await _catalogService.listCategories();
-    _cache.set(CacheKeys.categories, categories, ttl: const Duration(minutes: 10));
+    // Cache categories longer as they change infrequently
+    _cache.set(CacheKeys.categories, categories, ttl: const Duration(minutes: 30));
     return categories;
   }
 
@@ -131,6 +144,30 @@ class CachedCatalogService {
 
   Future<String> generateNextAssetId() {
     return _catalogService.generateNextAssetId();
+  }
+
+  Future<String> reserveNextAssetId({String counterDocId = 'default'}) {
+    return _catalogService.reserveNextAssetId(counterDocId: counterDocId);
+  }
+
+  Future<AssetIdSuggestion> suggestNextAssetIdForForm({
+    String counterDocId = 'default',
+    int pageSize = 1000,
+  }) {
+    return _catalogService.suggestNextAssetIdForForm(
+      counterDocId: counterDocId,
+      pageSize: pageSize,
+    );
+  }
+
+  Future<void> advanceAssetCounterAfterCreate(
+    String savedAssetId, {
+    String counterDocId = 'default',
+  }) {
+    return _catalogService.advanceAssetCounterAfterCreate(
+      savedAssetId,
+      counterDocId: counterDocId,
+    );
   }
 }
 

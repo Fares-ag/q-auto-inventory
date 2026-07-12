@@ -103,7 +103,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.person_add, size: 100, color: Colors.blue),
+                Icon(Icons.person_add, size: 100, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(height: 24),
                 Text(
                   'Create Account',

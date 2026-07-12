@@ -1,6 +1,5 @@
 // lib/services/web_pdf_download_service.dart
 
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 // Web-specific imports (only available on web)
 // ignore: avoid_web_libraries_in_flutter

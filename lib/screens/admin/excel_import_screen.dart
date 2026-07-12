@@ -177,13 +177,13 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.green[50],
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.green[200]!),
+                            border: Border.all(color: Theme.of(context).colorScheme.outline),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.check_circle, color: Colors.green),
+                              Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -241,14 +241,14 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
                               if (_importedCount > 0) ...[
                                 Chip(
                                   label: Text('✓ $_importedCount imported'),
-                                  backgroundColor: Colors.green[100],
+                                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                                 ),
                                 const SizedBox(width: 8),
                               ],
                               if (_errorCount > 0) ...[
                                 Chip(
                                   label: Text('✗ $_errorCount errors'),
-                                  backgroundColor: Colors.red[100],
+                                  backgroundColor: Theme.of(context).colorScheme.errorContainer,
                                 ),
                               ],
                             ],
@@ -262,10 +262,10 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
               if (_errors.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Card(
-                  color: Colors.red[50],
+                  color: Theme.of(context).colorScheme.errorContainer,
                   child: ExpansionTile(
                     title: Text('Errors (${_errors.length})'),
-                    leading: const Icon(Icons.error_outline, color: Colors.red),
+                    leading: Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error),
                     children: [
                       Padding(
                         padding: const EdgeInsets.all(16),
@@ -308,7 +308,7 @@ class _ExcelImportScreenState extends State<ExcelImportScreen> {
                                 padding: const EdgeInsets.only(left: 16, bottom: 4),
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.check, size: 16, color: Colors.green),
+                                    Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary),
                                     const SizedBox(width: 8),
                                     Text(col, style: Theme.of(context).textTheme.bodySmall),
                                   ],

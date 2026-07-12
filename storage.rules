@@ -1,28 +1,63 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+
     function isSignedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
-    // Item media: restrict writes to authenticated users
+    function userPerms() {
+      let userDoc = firestore.get(
+        /databases/(default)/documents/users/$(request.auth.uid)
+      );
+      return userDoc != null && 'permissions' in userDoc.data
+        ? userDoc.data.permissions
+        : [];
+    }
+
+    function staffPerms() {
+      let staffDoc = firestore.get(
+        /databases/(default)/documents/staff/$(request.auth.uid)
+      );
+      return staffDoc != null && 'permissions' in staffDoc.data
+        ? staffDoc.data.permissions
+        : [];
+    }
+
+    function canUploadMedia() {
+      return isSignedIn()
+        && (
+          request.auth.token.admin == true
+          || userPerms().hasAny([
+            'manage_items', 'admin', '*',
+            'finance', 'edit_financial_fields'
+          ])
+          || staffPerms().hasAny([
+            'manage_items', 'admin', '*',
+            'finance', 'edit_financial_fields'
+          ])
+        );
+    }
+
+    function isValidImage() {
+      return request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
     match /items/{itemId}/{allPaths=**} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if canUploadMedia() && isValidImage();
     }
 
-    // Signatures: restrict to authenticated users for both read and write
     match /signatures/{itemId}/{allPaths=**} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if canUploadMedia() && isValidImage();
     }
 
-    // Default: authenticated read, no write
     match /{allPaths=**} {
       allow read: if isSignedIn();
       allow write: if false;
     }
   }
 }
-
-

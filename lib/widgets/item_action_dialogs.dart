@@ -101,6 +101,88 @@ class ItemActionDialogs {
     }
   }
 
+  /// Inline edit dialog for the "SAP Finance Code" field, stored in
+  /// customFields['sapFinanceCode']. Mirrors the shelf-life dialog pattern
+  /// so behaviour and styling stay consistent.
+  /// Returns `true` if the value was saved to Firestore successfully.
+  static Future<bool> showEditSapFinanceCodeDialog(
+    BuildContext context,
+    InventoryItem item,
+  ) async {
+    final controller = TextEditingController(
+      text: item.customFields?['sapFinanceCode']?.toString() ?? '',
+    );
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit SAP Finance Code'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'SAP Finance Code',
+                hintText: 'e.g., 100200, FIN-2026-001',
+                helperText: 'SAP-specific finance/ledger code for this asset',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+              ),
+              textCapitalization: TextCapitalization.characters,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      try {
+        final catalog = context.read<CatalogService>();
+        final updatedFields =
+            Map<String, dynamic>.from(item.customFields ?? {});
+        final value = controller.text.trim();
+        if (value.isEmpty) {
+          updatedFields.remove('sapFinanceCode');
+        } else {
+          updatedFields['sapFinanceCode'] = value;
+        }
+        await catalog.updateItem(item.id, {
+          'customFields': updatedFields,
+        });
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('SAP Finance Code updated')),
+          );
+        }
+        return true;
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          );
+        }
+        return false;
+      } finally {
+        controller.dispose();
+      }
+    } else {
+      controller.dispose();
+      return false;
+    }
+  }
+
   static Future<void> showEditConditionDialog(
     BuildContext context,
     InventoryItem item,
@@ -118,7 +200,7 @@ class ItemActionDialogs {
           mainAxisSize: MainAxisSize.min,
           children: [
             DropdownButtonFormField<String>(
-              value: selectedCondition,
+              initialValue: selectedCondition,
               decoration: const InputDecoration(
                 labelText: 'Condition',
                 border: OutlineInputBorder(),

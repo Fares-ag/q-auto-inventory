@@ -23,13 +23,13 @@ class ErrorRetryWidget extends StatelessWidget {
             Icon(
               icon ?? Icons.error_outline,
               size: 64,
-              color: Colors.red[300],
+              color: Theme.of(context).colorScheme.error,
             ),
             const SizedBox(height: 16),
             Text(
               'Error',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.red[700],
+                    color: Theme.of(context).colorScheme.error,
                     fontWeight: FontWeight.bold,
                   ),
             ),

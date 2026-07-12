@@ -49,7 +49,7 @@ class _PaginatedListViewState<T> extends State<PaginatedListView<T>> {
     try {
       final newItems = await widget.loadItems(_currentPage, widget.pageSize);
 
-      if (!mounted) return;
+      if (!context.mounted) return;
 
       setState(() {
         _items.addAll(newItems);
@@ -58,7 +58,7 @@ class _PaginatedListViewState<T> extends State<PaginatedListView<T>> {
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
 
       setState(() {
         _isLoading = false;
@@ -87,7 +87,7 @@ class _PaginatedListViewState<T> extends State<PaginatedListView<T>> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
                 const SizedBox(height: 16),
                 Text('Error loading items: $_error'),
                 const SizedBox(height: 16),
@@ -111,6 +111,7 @@ class _PaginatedListViewState<T> extends State<PaginatedListView<T>> {
       onRefresh: _refresh,
       child: ListView.builder(
         itemCount: _items.length + (_hasMore ? 1 : 0),
+        cacheExtent: 500, // Cache more items for smoother scrolling
         itemBuilder: (context, index) {
           if (index >= _items.length) {
             // Load more trigger
@@ -128,7 +129,9 @@ class _PaginatedListViewState<T> extends State<PaginatedListView<T>> {
                 );
           }
 
-          return widget.itemBuilder(context, _items[index], index);
+          return RepaintBoundary(
+            child: widget.itemBuilder(context, _items[index], index),
+          );
         },
       ),
     );

@@ -136,7 +136,7 @@ class _LocationsManagementScreenState extends State<LocationsManagementScreen> {
                             onPressed: () => _showLocationDialog(location: loc),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
+                            icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
                             onPressed: () async {
                               final confirm = await showDialog<bool>(
                                 context: context,

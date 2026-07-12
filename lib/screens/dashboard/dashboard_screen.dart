@@ -1,297 +1,563 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/firestore_models.dart';
-import '../../services/firebase_services.dart';
-import '../../utils/network_utils.dart';
+import '../../providers/data_providers.dart';
+import '../../providers/permission_providers.dart';
+import '../../theme/app_theme.dart';
+import '../../utils/app_spacing.dart';
+import '../../utils/operator_layout.dart';
 import '../../widgets/charts/enhanced_dashboard_charts.dart';
-import '../../widgets/error_retry_widget.dart';
-import '../../widgets/network_error_widget.dart';
+import '../../widgets/empty_state.dart';
 import '../../widgets/permission_guard.dart';
 import '../../widgets/skeleton_list.dart';
 import '../items/all_items_screen.dart';
 import '../items/bulk_assign_screen.dart';
+import '../../navigation/app_router.dart';
 
-class DashboardScreen extends StatefulWidget {
+String? _dashboardActivitySubtitle(
+    HistoryEntry entry, List<InventoryItem> items) {
+  if (items.isEmpty) return entry.displaySubtitle;
+  String? itemName;
+  for (final i in items) {
+    if (i.id == entry.itemId) {
+      itemName = i.name;
+      break;
+    }
+  }
+  final detail = entry.displaySubtitle;
+  if (itemName != null && itemName.isNotEmpty) {
+    if (detail == null || detail.isEmpty) return itemName;
+    if (detail.contains(itemName)) return detail;
+    return '$itemName · $detail';
+  }
+  return detail;
+}
+
+class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(currentUserDataProvider);
 
-class _DashboardScreenState extends State<DashboardScreen> {
-  late Future<_DashboardData> _dashboardFuture;
+    final title = userAsync.when(
+      loading: () => 'Dashboard',
+      error: (_, __) => 'Dashboard',
+      data: (u) {
+        final r = u?.role?.toLowerCase() ?? '';
+        if (r.contains('finance')) return 'Finance Dashboard';
+        if (r.contains('admin')) return 'Admin Dashboard';
+        if (r.contains('operator')) return 'Operator Dashboard';
+        return 'Dashboard';
+      },
+    );
 
-  @override
-  void initState() {
-    super.initState();
-    _dashboardFuture = _loadDashboardData();
-  }
+    final compact = userAsync.maybeWhen(
+      data: (u) => isOperatorLayoutRole(u?.role),
+      orElse: () => false,
+    );
+    final sectionGap = compact ? AppSpacing.gapLg : AppSpacing.gapXl2;
 
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
-      body: FutureBuilder<_DashboardData>(
-        future: _dashboardFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Padding(
-              padding: EdgeInsets.fromLTRB(16, 56, 16, 16),
-              child: SkeletonList(itemCount: 10, itemHeight: 72),
-            );
-          }
-          if (snapshot.hasError) {
-            final error = snapshot.error!;
-            return NetworkUtils.isNetworkError(error)
-                ? NetworkErrorWidget(
-                    error: error,
-                    onRetry: () {
-                      setState(() {
-                        _dashboardFuture = _loadDashboardData();
-                      });
-                    },
-                  )
-                : ErrorRetryWidget(
-                    message: NetworkUtils.getErrorMessage(error),
-                    onRetry: () {
-                      setState(() {
-                        _dashboardFuture = _loadDashboardData();
-                      });
-                    },
-                  );
-          }
-          final data = snapshot.data ?? const _DashboardData.empty();
-          return RefreshIndicator(
-            onRefresh: () async {
-              setState(() {
-                _dashboardFuture = _loadDashboardData();
-              });
-              await _dashboardFuture;
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 56, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Operator Dashboard',
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Overview',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  _OverviewGrid(data: data),
-                  const SizedBox(height: 24),
-                  EnhancedDashboardCharts(
-                    items: data.items,
-                    departments: data.departments,
-                    history: data.recentHistory,
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Quick Actions',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  _QuickActions(data: data),
-                  const SizedBox(height: 24),
-                  Text(
-                    'My Recent Activity',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  _RecentActivityList(entries: data.recentHistory),
-                ],
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(dashboardStatsProvider);
+            ref.invalidate(dashboardItemsProvider);
+            ref.invalidate(dashboardHistoryProvider);
+            ref.invalidate(dashboardIssuesCountProvider);
+            ref.invalidate(departmentsProvider);
+            ref.invalidate(categoriesProvider);
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                  child: _DashboardHeader(title: title, compact: compact)),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: _OverviewSection(compact: compact),
+                ),
               ),
-            ),
-          );
-        },
+              SliverToBoxAdapter(child: sectionGap),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: _SectionHeader(title: 'Analytics'),
+                ),
+              ),
+              SliverToBoxAdapter(child: AppSpacing.gapMd),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: _ChartsSection(),
+                ),
+              ),
+              SliverToBoxAdapter(child: sectionGap),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: _SectionHeader(title: 'Quick Actions'),
+                ),
+              ),
+              SliverToBoxAdapter(child: AppSpacing.gapMd),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: _QuickActionsSection(),
+                ),
+              ),
+              SliverToBoxAdapter(child: sectionGap),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: _SectionHeader(title: 'Recent Activity'),
+                ),
+              ),
+              SliverToBoxAdapter(child: AppSpacing.gapMd),
+              const _ActivitySection(),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: rootShellTabScrollBottomInset(context,
+                      compact: compact),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
-
-  Future<_DashboardData> _loadDashboardData() async {
-    try {
-      // Check network connection first
-      final hasConnection = await NetworkUtils.hasInternetConnection();
-      if (!hasConnection) {
-        throw Exception('No internet connection');
-      }
-
-      final catalog = context.read<CatalogService>();
-      final issueService = context.read<IssueService>();
-      final historyService = context.read<HistoryService>();
-      final deptService = context.read<DepartmentService>();
-
-      final items = await catalog.listAllItems(pageSize: 500);
-      final issues = await issueService.listOpenIssues(limit: 20);
-      final history = await historyService.recentHistory(limit: 6);
-      final departments = await deptService.listDepartments(includeInactive: false);
-
-      final total = items.length;
-      final assigned = items
-          .where((item) => (item.assignedTo != null && item.assignedTo!.isNotEmpty))
-          .length;
-      final tagged = items
-          .where((item) => (item.qrCodeUrl != null && item.qrCodeUrl!.isNotEmpty))
-          .length;
-      final unassigned = total - assigned;
-
-      return _DashboardData(
-        items: items,
-        totalItems: total,
-        assignedItems: assigned,
-        unassignedItems: unassigned,
-        taggedItems: tagged,
-        issuesCount: issues.length,
-        remindersCount: 0,
-        recentHistory: history,
-        departments: departments,
-      );
-    } catch (e) {
-      debugPrint('Error loading dashboard data: $e');
-      rethrow;
-    }
-  }
 }
 
-class _DashboardData {
-  const _DashboardData({
-    required this.items,
-    required this.totalItems,
-    required this.assignedItems,
-    required this.unassignedItems,
-    required this.taggedItems,
-    required this.issuesCount,
-    required this.remindersCount,
-    required this.recentHistory,
-    this.departments = const [],
-  });
+// ── Dashboard header ──────────────────────────────────────────────────────────
 
-  const _DashboardData.empty()
-      : items = const [],
-        totalItems = 0,
-        assignedItems = 0,
-        unassignedItems = 0,
-        taggedItems = 0,
-        issuesCount = 0,
-        remindersCount = 0,
-        recentHistory = const [],
-        departments = const [];
-
-  final List<InventoryItem> items;
-  final int totalItems;
-  final int assignedItems;
-  final int unassignedItems;
-  final int taggedItems;
-  final int issuesCount;
-  final int remindersCount;
-  final List<HistoryEntry> recentHistory;
-  final List<Department> departments;
-}
-
-class _OverviewGrid extends StatelessWidget {
-  const _OverviewGrid({required this.data});
-
-  final _DashboardData data;
+class _DashboardHeader extends StatelessWidget {
+  const _DashboardHeader({required this.title, this.compact = false});
+  final String title;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final stats = [
+    final cs = Theme.of(context).colorScheme;
+    final now = DateTime.now();
+    final hour = now.hour;
+    final greeting = hour < 12
+        ? 'Good morning'
+        : hour < 17
+            ? 'Good afternoon'
+            : 'Good evening';
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        compact ? AppSpacing.md : AppSpacing.xl,
+        AppSpacing.lg,
+        compact ? AppSpacing.lg : AppSpacing.xl2,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  greeting,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                ),
+                AppSpacing.gapXs,
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: AppSpacing.roundedMd,
+            ),
+            child: Icon(Icons.inventory_2_rounded,
+                color: cs.primary, size: 24),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Section header ────────────────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium,
+      );
+}
+
+// ── Overview stat grid - resolves stats + issues + departments independently ─
+
+class _OverviewSection extends ConsumerWidget {
+  const _OverviewSection({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statsAsync = ref.watch(dashboardStatsProvider);
+    final issuesAsync = ref.watch(dashboardIssuesCountProvider);
+    final deptsAsync = ref.watch(departmentsProvider);
+
+    final stats = statsAsync.valueOrNull ?? const DashboardStats.empty();
+    final issuesCount = issuesAsync.valueOrNull ?? 0;
+    final deptsCount = deptsAsync.valueOrNull?.length ?? 0;
+    final isLoading = statsAsync.isLoading;
+
+    final tiles = [
       _StatConfig(
-        label: 'Total Items',
-        value: data.totalItems.toString(),
-        icon: Icons.inventory_2,
-        color: Colors.blue,
+        label: 'Total',
+        value: stats.total.toString(),
+        icon: Icons.inventory_2_rounded,
+        color: AppTheme.primary,
+        bg: AppTheme.primaryContainer,
+        loading: isLoading,
       ),
       _StatConfig(
-        label: 'Assigned Items',
-        value: data.assignedItems.toString(),
-        icon: Icons.location_on,
-        color: Colors.green,
+        label: 'Assigned',
+        value: stats.assigned.toString(),
+        icon: Icons.person_pin_rounded,
+        color: AppTheme.statusAssigned,
+        bg: AppTheme.statusAssignedBg,
+        loading: isLoading,
       ),
       _StatConfig(
-        label: 'Unassigned Items',
-        value: data.unassignedItems.toString(),
-        icon: Icons.push_pin_outlined,
-        color: Colors.orange,
+        label: 'Unassigned',
+        value: stats.unassigned.toString(),
+        icon: Icons.inbox_rounded,
+        color: AppTheme.statusMaintenance,
+        bg: AppTheme.statusMaintenanceBg,
+        loading: isLoading,
       ),
       _StatConfig(
-        label: 'Tagged Items',
-        value: data.taggedItems.toString(),
-        icon: Icons.qr_code,
-        color: Colors.purple,
+        label: 'Tagged',
+        value: stats.tagged.toString(),
+        icon: Icons.qr_code_rounded,
+        color: AppTheme.info,
+        bg: AppTheme.infoContainer,
+        loading: isLoading,
       ),
       _StatConfig(
         label: 'Issues',
-        value: data.issuesCount.toString(),
-        icon: Icons.warning_amber_outlined,
-        color: Colors.red,
+        value: issuesCount.toString(),
+        icon: Icons.warning_amber_rounded,
+        color: AppTheme.error,
+        bg: AppTheme.errorContainer,
+        loading: issuesAsync.isLoading,
       ),
       _StatConfig(
-        label: 'Reminders',
-        value: data.remindersCount.toString(),
-        icon: Icons.notifications_active_outlined,
-        color: Colors.teal,
+        label: 'Departments',
+        value: deptsCount.toString(),
+        icon: Icons.business_rounded,
+        color: AppTheme.success,
+        bg: AppTheme.successContainer,
+        loading: deptsAsync.isLoading,
       ),
     ];
 
     return GridView.builder(
-      itemCount: stats.length,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.2,
+        mainAxisSpacing: compact ? AppSpacing.sm : AppSpacing.md,
+        crossAxisSpacing: compact ? AppSpacing.sm : AppSpacing.md,
+        // Fixed height avoids overflow from headlineSmall + label + padding when
+        // aspect ratio would make cells too short (common on operator / phones).
+        mainAxisExtent: compact ? 122 : 128,
       ),
-      itemBuilder: (context, index) {
-        final stat = stats[index];
-        return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(stat.icon, size: 32, color: stat.color),
-                const SizedBox(height: 12),
-                Text(
-                  stat.value,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+      itemCount: tiles.length,
+      itemBuilder: (ctx, i) => _StatCard(config: tiles[i]),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({required this.config});
+  final _StatConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: AppSpacing.cardPadding,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: AppSpacing.roundedLg,
+        border: Border.all(color: AppTheme.lightBorder, width: 1),
+        boxShadow: AppTheme.shadowSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisSize: MainAxisSize.max,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: config.bg,
+                  borderRadius: AppSpacing.roundedMd,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  stat.label,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: Colors.grey[700]),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+                child: Icon(config.icon, color: config.color, size: 18),
+              ),
+            ],
+          ),
+          AppSpacing.gapSm,
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: config.loading
+                  ? const _StatValuePlaceholder()
+                  : FittedBox(
+                      alignment: Alignment.centerLeft,
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        config.value,
+                        maxLines: 1,
+                        style:
+                            Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: config.color,
+                                ),
+                      ),
+                    ),
+            ),
+          ),
+          Text(
+            config.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatValuePlaceholder extends StatelessWidget {
+  const _StatValuePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48,
+      height: 24,
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(4),
+      ),
+    );
+  }
+}
+
+// ── Charts section - resolves once items + departments are ready ────────────
+
+class _ChartsSection extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final itemsAsync = ref.watch(dashboardItemsProvider);
+    final deptsAsync = ref.watch(departmentsProvider);
+    final historyAsync = ref.watch(dashboardHistoryProvider);
+
+    if (itemsAsync.isLoading || deptsAsync.isLoading) {
+      return const SkeletonCard(height: 220);
+    }
+    if (itemsAsync.hasError) {
+      return _SectionError(
+        message: 'Failed to load chart data',
+        onRetry: () => ref.invalidate(dashboardItemsProvider),
+      );
+    }
+
+    final items = itemsAsync.valueOrNull ?? const [];
+    final depts = deptsAsync.valueOrNull ?? const [];
+    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final history = historyAsync.valueOrNull ?? const [];
+    final mergedHistory =
+        mergeDashboardActivity(history, items, limit: 80);
+
+    return RepaintBoundary(
+      child: EnhancedDashboardCharts(
+        items: items,
+        departments: depts,
+        categories: categories,
+        history: mergedHistory,
+      ),
+    );
+  }
+}
+
+// ── Quick actions - structure instant, items used only for "View All" tap ────
+
+class _QuickActionsSection extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final actions = [
+      _ActionConfig(
+        label: 'Add Item',
+        icon: Icons.add_rounded,
+        color: AppTheme.primary,
+        bg: AppTheme.primaryContainer,
+        requiresPermission: true,
+        onTap: () => Navigator.of(context).pushNamed('/items/add'),
+      ),
+      _ActionConfig(
+        label: 'Pending',
+        icon: Icons.pending_actions_rounded,
+        color: AppTheme.warning,
+        bg: AppTheme.warningContainer,
+        onTap: () => Navigator.of(context).pushNamed('/approvals'),
+      ),
+      _ActionConfig(
+        label: 'View All',
+        icon: Icons.view_list_rounded,
+        color: AppTheme.info,
+        bg: AppTheme.infoContainer,
+        onTap: () {
+          // Read on tap so we don't block the dashboard render on items load.
+          final items = ref.read(dashboardItemsProvider).valueOrNull ?? const [];
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => AllItemsScreen(items: items)),
+          );
+        },
+      ),
+      _ActionConfig(
+        label: 'Bulk Assign',
+        icon: Icons.grid_view_rounded,
+        color: AppTheme.success,
+        bg: AppTheme.successContainer,
+        requiresPermission: true,
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const BulkAssignScreen()),
+        ),
+      ),
+      _ActionConfig(
+        label: 'Reports',
+        icon: Icons.bar_chart_rounded,
+        color: AppTheme.statusPending,
+        bg: AppTheme.statusPendingBg,
+        requiresReports: true,
+        onTap: () => Navigator.of(context).pushNamed(AppRouter.reportsRoute),
+      ),
+    ];
+
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: actions.map((a) {
+        final btn = _ActionChip(config: a);
+        if (a.requiresPermission) return ItemManagementOnly(child: btn);
+        if (a.requiresReports) return ReportsOnly(child: btn);
+        return btn;
+      }).toList(),
+    );
+  }
+}
+
+class _ActionChip extends StatelessWidget {
+  const _ActionChip({required this.config});
+  final _ActionConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: config.onTap,
+      borderRadius: AppSpacing.roundedLg,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+        decoration: BoxDecoration(
+          color: config.bg,
+          borderRadius: AppSpacing.roundedLg,
+          border: Border.all(color: config.color.withOpacity(0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(config.icon, size: 18, color: config.color),
+            AppSpacing.hGapSm,
+            Text(
+              config.label,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: config.color,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Activity section - independently resolved history ───────────────────────
+
+class _ActivitySection extends ConsumerWidget {
+  const _ActivitySection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyAsync = ref.watch(dashboardHistoryProvider);
+    final items = ref.watch(dashboardItemsProvider).valueOrNull ?? const [];
+
+    return historyAsync.when(
+      loading: () => const SliverPadding(
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        sliver: SliverToBoxAdapter(
+          child: SkeletonList(itemCount: 4, itemHeight: 56),
+        ),
+      ),
+      error: (e, _) => SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          child: _SectionError(
+            message: 'Failed to load recent activity',
+            onRetry: () => ref.invalidate(dashboardHistoryProvider),
+          ),
+        ),
+      ),
+      data: (history) {
+        final rows = mergeDashboardActivity(history, items, limit: 12);
+        if (rows.isEmpty) {
+          return const SliverToBoxAdapter(
+            child: EmptyState(
+              icon: Icons.history_rounded,
+              title: 'No recent activity',
+              message: 'Actions you take will appear here.',
+              compact: true,
+            ),
+          );
+        }
+        return SliverList.separated(
+          itemCount: rows.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (ctx, i) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            child: _ActivityTile(
+              entry: rows[i],
+              resolvedSubtitle: _dashboardActivitySubtitle(rows[i], items),
             ),
           ),
         );
@@ -300,123 +566,112 @@ class _OverviewGrid extends StatelessWidget {
   }
 }
 
-class _QuickActions extends StatelessWidget {
-  const _QuickActions({required this.data});
-
-  final _DashboardData data;
+class _ActivityTile extends StatelessWidget {
+  const _ActivityTile({required this.entry, this.resolvedSubtitle});
+  final HistoryEntry entry;
+  final String? resolvedSubtitle;
 
   @override
   Widget build(BuildContext context) {
-    final actions = [
-      _QuickAction(
-        label: 'Add Item',
-        icon: Icons.add_box_outlined,
-        color: Colors.green,
-        onTap: () => Navigator.of(context).pushNamed('/items/add'),
+    final cs = Theme.of(context).colorScheme;
+    final dateStr = entry.timestamp != null
+        ? entry.timestamp!.toLocal().toString().split(' ').first
+        : '';
+
+    final subtitle = resolvedSubtitle ?? entry.displaySubtitle;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: AppSpacing.roundedLg,
+        border: Border.all(color: AppTheme.lightBorder, width: 1),
+        boxShadow: AppTheme.shadowSm,
       ),
-      _QuickAction(
-        label: 'View Pending',
-        icon: Icons.list_alt_outlined,
-        color: Colors.deepPurple,
-        onTap: () => Navigator.of(context).pushNamed('/approvals'),
-      ),
-      _QuickAction(
-        label: 'View All',
-        icon: Icons.view_list,
-        color: Colors.blue,
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => AllItemsScreen(items: data.items),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: AppSpacing.roundedMd,
             ),
-          );
-        },
-      ),
-      _QuickAction(
-        label: 'Bulk Assign',
-        icon: Icons.grid_view,
-        color: Colors.orange,
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const BulkAssignScreen(),
+            child: Icon(Icons.history_rounded, size: 16, color: cs.primary),
           ),
-        ),
-      ),
-    ];
-
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: actions.map((action) {
-        final btn = _QuickActionButton(action: action);
-        final needsManage = action.label == 'Add Item' || action.label == 'Bulk Assign';
-        return needsManage ? ItemManagementOnly(child: btn) : btn;
-      }).toList(),
-    );
-  }
-}
-
-class _QuickActionButton extends StatelessWidget {
-  const _QuickActionButton({required this.action});
-
-  final _QuickAction action;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: MediaQuery.of(context).size.width > 600
-          ? 220
-          : (MediaQuery.of(context).size.width - 52) / 2,
-      child: OutlinedButton.icon(
-        onPressed: action.onTap,
-        icon: Icon(action.icon, color: action.color),
-        label: Text(action.label),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-      ),
-    );
-  }
-}
-
-class _RecentActivityList extends StatelessWidget {
-  const _RecentActivityList({required this.entries});
-
-  final List<HistoryEntry> entries;
-
-  @override
-  Widget build(BuildContext context) {
-    if (entries.isEmpty) {
-      return Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: const Padding(
-          padding: EdgeInsets.all(24),
-          child: Center(child: Text('No recent activity.')),
-        ),
-      );
-    }
-
-    return Column(
-      children: entries
-          .map(
-            (entry) => Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: ListTile(
-                leading: const Icon(Icons.refresh),
-                title: Text(entry.action),
-                subtitle: Text(entry.notes ?? entry.itemId),
-                trailing: Text(
-                  entry.timestamp?.toLocal().toString().split(' ').first ?? '',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
+          AppSpacing.hGapMd,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(entry.displayTitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        )),
+                if (subtitle != null && subtitle.isNotEmpty)
+                  Text(subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall),
+              ],
             ),
-          )
-          .toList(),
+          ),
+          Flexible(
+            child: Text(
+              dateStr,
+              style: Theme.of(context).textTheme.labelSmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
+
+// ── Reusable per-section error ──────────────────────────────────────────────
+
+class _SectionError extends StatelessWidget {
+  const _SectionError({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: AppSpacing.cardPadding,
+      decoration: BoxDecoration(
+        color: AppTheme.errorContainer,
+        borderRadius: AppSpacing.roundedLg,
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded,
+              color: AppTheme.error, size: 20),
+          AppSpacing.hGapSm,
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.error,
+                  ),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Data models ───────────────────────────────────────────────────────────────
 
 class _StatConfig {
   const _StatConfig({
@@ -424,24 +679,32 @@ class _StatConfig {
     required this.value,
     required this.icon,
     required this.color,
+    required this.bg,
+    this.loading = false,
   });
-
   final String label;
   final String value;
   final IconData icon;
   final Color color;
+  final Color bg;
+  final bool loading;
 }
 
-class _QuickAction {
-  const _QuickAction({
+class _ActionConfig {
+  const _ActionConfig({
     required this.label,
     required this.icon,
     required this.color,
+    required this.bg,
     required this.onTap,
+    this.requiresPermission = false,
+    this.requiresReports = false,
   });
-
   final String label;
   final IconData icon;
   final Color color;
+  final Color bg;
   final VoidCallback onTap;
+  final bool requiresPermission;
+  final bool requiresReports;
 }

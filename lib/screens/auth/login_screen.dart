@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 
+import '../../services/auth_session_service.dart';
 import '../../services/firebase_services.dart';
+import '../../services/permission_service.dart';
 import '../../navigation/app_router.dart';
-import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -30,6 +31,28 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+
+      final uid = bootstrapper.auth.currentUser?.uid;
+      if (uid != null) {
+        final userDoc =
+            await bootstrapper.firestore.collection('users').doc(uid).get();
+        if (userDoc.exists && isUserRecordDisabled(userDoc.data())) {
+          await signOutAndClearSession(
+            auth: bootstrapper.auth,
+            permissionService: context.read<PermissionService>(),
+          );
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'This account has been disabled. Contact your administrator.',
+                ),
+              ),
+            );
+          }
+          return;
+        }
+      }
 
       if (context.mounted) {
         Navigator.of(context).pushReplacementNamed(AppRouter.initialRoute);
@@ -168,23 +191,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         : const Text('Sign In'),
                   ),
                   const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const SignUpScreen()),
-                      );
-                    },
-                    child: const Text('Don\'t have an account? Sign Up'),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Contact your administrator for account access'),
+                  Text(
+                    'Need an account? Contact your administrator.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
-                      );
-                    },
-                    child: const Text('Need help?'),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),

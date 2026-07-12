@@ -105,7 +105,7 @@ class BulkQrPdfService {
           pageFormat: customFormat,
           margin: const pw.EdgeInsets.all(0),
           build: (pw.Context context) {
-            final double mm = pdf.PdfPageFormat.mm;
+            const double mm = pdf.PdfPageFormat.mm;
             final bool useCustomLabel =
                 pageWidthMm != null && pageHeightMm != null;
 
@@ -142,7 +142,7 @@ class BulkQrPdfService {
                       width: frameSize,
                       height: frameSize,
                       padding: useCustomLabel
-                          ? pw.EdgeInsets.all(1.5 * mm)
+                          ? const pw.EdgeInsets.all(1.5 * mm)
                           : const pw.EdgeInsets.all(8),
                       decoration: pw.BoxDecoration(
                         border: pw.Border.all(
@@ -187,7 +187,7 @@ class BulkQrPdfService {
               width: double.infinity,
               height: double.infinity,
               padding: useCustomLabel
-                  ? pw.EdgeInsets.symmetric(
+                  ? const pw.EdgeInsets.symmetric(
                       horizontal: 1 * mm, vertical: 2 * mm)
                   : const pw.EdgeInsets.all(8),
               child: pw.Column(

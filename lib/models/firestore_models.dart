@@ -25,6 +25,22 @@ DateTime? _parseTimestamp(dynamic value) {
   return null;
 }
 
+String? _stringFromUnknown(dynamic value) {
+  if (value == null) return null;
+  if (value is String) return value.isEmpty ? null : value;
+  if (value is Map) {
+    // If it's a Map, try to extract a meaningful string value
+    // Common patterns: {'name': '...'}, {'id': '...'}, {'displayName': '...'}
+    if (value.containsKey('name')) return value['name']?.toString();
+    if (value.containsKey('id')) return value['id']?.toString();
+    if (value.containsKey('displayName')) return value['displayName']?.toString();
+    if (value.containsKey('email')) return value['email']?.toString();
+    // If no common key found, return null
+    return null;
+  }
+  return value.toString();
+}
+
 List<String> _stringListFromUnknown(dynamic value) {
   if (value == null) return const <String>[];
   if (value is List) {
@@ -227,6 +243,7 @@ class HistoryEntry extends FirestoreModel {
     this.notes,
     this.metadata,
     this.timestamp,
+    this.signatureUrl,
   });
 
   final String itemId;
@@ -235,6 +252,7 @@ class HistoryEntry extends FirestoreModel {
   final String? notes;
   final Map<String, dynamic>? metadata;
   final DateTime? timestamp;
+  final String? signatureUrl;
 
   factory HistoryEntry.fromJson(String id, Map<String, dynamic> json) {
     return HistoryEntry(
@@ -245,6 +263,7 @@ class HistoryEntry extends FirestoreModel {
       notes: json['notes'] as String?,
       metadata: (json['metadata'] as Map<String, dynamic>?),
       timestamp: _parseTimestamp(json['timestamp']),
+      signatureUrl: _stringFromUnknown(json['signatureUrl']),
     );
   }
 
@@ -257,7 +276,93 @@ class HistoryEntry extends FirestoreModel {
       if (notes != null) 'notes': notes,
       if (metadata != null) 'metadata': metadata,
       if (timestamp != null) 'timestamp': Timestamp.fromDate(timestamp!),
+      if (signatureUrl != null) 'signatureUrl': signatureUrl,
     };
+  }
+}
+
+List<String>? _fieldKeysFromHistoryMetadata(Map<String, dynamic>? m) {
+  if (m == null) return null;
+  final fields = m['fields'];
+  if (fields is List && fields.isNotEmpty) {
+    return fields.map((e) => e.toString()).toList();
+  }
+  final updatedFields = m['updatedFields'];
+  if (updatedFields is List && updatedFields.isNotEmpty) {
+    return updatedFields.map((e) => e.toString()).toList();
+  }
+  final rawUpdates = m['updates'];
+  if (rawUpdates is Map) {
+    final keys = rawUpdates.keys
+        .map((e) => e.toString())
+        .where((k) => k != 'updatedAt')
+        .toList();
+    if (keys.isNotEmpty) return keys;
+  }
+  return null;
+}
+
+extension HistoryEntryDisplay on HistoryEntry {
+  /// User-facing title (avoid raw codes like "update" / "STATUS_UPDATE").
+  String get displayTitle {
+    final a = action.toLowerCase().trim();
+    switch (a) {
+      case 'create':
+        return 'Item created';
+      case 'update':
+        return 'Item updated';
+      case 'upsert':
+        return 'Item saved';
+      case 'delete':
+        return 'Item removed';
+      case 'status_update':
+        return 'Status changed';
+      case 'check_in':
+        return 'Checked in';
+      case 'check_out':
+        return 'Checked out';
+      case 'finance_edit':
+        return 'Finance edit';
+      default:
+        if (a.isEmpty) return 'Activity';
+        final spaced = a.replaceAll('_', ' ');
+        return spaced[0].toUpperCase() + spaced.substring(1);
+    }
+  }
+
+  /// Second line for list tiles: notes, field list, asset name, etc.
+  String? get displaySubtitle {
+    if (notes != null && notes!.trim().isNotEmpty) return notes!.trim();
+    final keys = _fieldKeysFromHistoryMetadata(metadata);
+    if (keys != null && keys.isNotEmpty) {
+      return keys
+          .map(
+            (k) => k.replaceAllMapped(
+              RegExp(r'([a-z])([A-Z])'),
+              (m) => '${m[1]} ${m[2]}',
+            ),
+          )
+          .map((k) => k.replaceAll('_', ' '))
+          .join(', ');
+    }
+    final m = metadata;
+    if (m != null) {
+      final status = m['status'];
+      if (status != null && status.toString().isNotEmpty) {
+        return 'Status: $status';
+      }
+      final name = m['name'];
+      final assetId = m['assetId'];
+      final parts = <String>[];
+      if (name != null && name.toString().isNotEmpty) {
+        parts.add(name.toString());
+      }
+      if (assetId != null && assetId.toString().isNotEmpty) {
+        parts.add(assetId.toString());
+      }
+      if (parts.isNotEmpty) return parts.join(' · ');
+    }
+    return null;
   }
 }
 
@@ -352,6 +457,26 @@ class InventoryItem extends FirestoreModel {
     this.plant,
     this.owner,
     this.vehicleId,
+    this.subDepartment,
+    this.isAvailable,
+    this.isTagged,
+    this.isWrittenOff,
+    this.itemType,
+    this.modelCode,
+    this.modelDesc,
+    this.modelYear,
+    this.company,
+    this.assetType,
+    this.warranty,
+    this.mileage,
+    this.registrationDate,
+    this.serialNumber,
+    this.lastMaintenanceDate,
+    this.nextMaintenanceDate,
+    this.maintenanceSchedule,
+    this.assetNumber,
+    this.createdAt,
+    this.updatedAt,
   });
 
   final String assetId;
@@ -383,41 +508,86 @@ class InventoryItem extends FirestoreModel {
   final String? plant;
   final String? owner;
   final String? vehicleId;
+  final String? subDepartment;
+  final bool? isAvailable;
+  final bool? isTagged;
+  final bool? isWrittenOff;
+  final String? itemType;
+  final String? modelCode;
+  final String? modelDesc;
+  final String? modelYear;
+  final String? company;
+  final String? assetType;
+  final String? warranty;
+  final int? mileage;
+  final DateTime? registrationDate;
+  final String? serialNumber;
+  final DateTime? lastMaintenanceDate;
+  final DateTime? nextMaintenanceDate;
+  final String? maintenanceSchedule;
+  final String? assetNumber;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   factory InventoryItem.fromJson(String id, Map<String, dynamic> json) {
     return InventoryItem(
-      id: id,
-      assetId: json['assetId'] as String? ?? id,
-      name: json['name'] as String? ?? id,
-      categoryId: json['categoryId'] as String? ?? '',
-      departmentId: json['departmentId'] as String? ?? '',
-      description: json['description'] as String?,
+      id: json['id'] as String? ?? id,
+      assetId: _stringFromUnknown(json['assetId']) ?? _stringFromUnknown(json['qrCodeId']) ?? id,
+      name: _stringFromUnknown(json['name']) ?? id,
+      categoryId: _stringFromUnknown(json['categoryId']) ?? _stringFromUnknown(json['category']) ?? '',
+      departmentId: _stringFromUnknown(json['departmentId']) ?? _stringFromUnknown(json['department']) ?? '',
+      description: _stringFromUnknown(json['description']),
       quantity: (json['quantity'] as num?)?.toInt(),
-      status: json['status'] as String?,
-      locationId: json['locationId'] as String?,
-      assignedTo: json['assignedTo'] as String?,
+      status: _stringFromUnknown(json['status']),
+      locationId: _stringFromUnknown(json['locationId']) ?? _stringFromUnknown(json['location']),
+      assignedTo: _stringFromUnknown(json['assignedTo']) ?? _stringFromUnknown(json['assignedStaff']),
       purchaseDate: _parseTimestamp(json['purchaseDate']),
       warrantyExpiry: _parseTimestamp(json['warrantyExpiry']),
       lastServicedAt: _parseTimestamp(json['lastServicedAt']),
       tags: (json['tags'] as List?)?.cast<String>() ?? const [],
-      thumbnailUrl: json['thumbnailUrl'] as String?,
-      qrCodeUrl: json['qrCodeUrl'] as String?,
+      thumbnailUrl: _stringFromUnknown(json['thumbnailUrl']) ??
+          _stringFromUnknown(json['imageUrl']) ??
+          ((json['imageUrls'] as List?)?.isNotEmpty == true
+              ? _stringFromUnknown((json['imageUrls'] as List).first)
+              : null),
+      qrCodeUrl: _stringFromUnknown(json['qrCodeUrl']),
       customFields: (json['customFields'] as Map<String, dynamic>?),
       supplier: json['supplier'] as String? ?? json['vendor'] as String?,
       variants: json['variants'] as String?,
       purchasePrice: (json['purchasePrice'] as num?)?.toDouble(),
       shelfLifeYears: (json['shelfLifeYears'] as num?)?.toInt(),
-      coCd: json['coCd'] as String? ?? json['cocd'] as String?,
-      sapClass: json['sapClass'] as String?,
-      assetClassDesc: json['assetClassDesc'] as String?,
-      apcAccount: json['apcAcct'] as String? ?? json['apcAccount'] as String?,
-      licensePlate: json['licPlate'] as String? ?? json['licensePlate'] as String?,
-      vendor: json['vendor'] as String?,
-      plant: json['plnt'] as String? ?? json['plant'] as String?,
-      owner: json['owner'] as String?,
-      vehicleId: json['vehicleIdNumber'] as String? ??
-          json['vehicleIdNo'] as String? ??
-          json['vehicleId'] as String?,
+      coCd: _stringFromUnknown(json['coCd']) ?? _stringFromUnknown(json['cocd']),
+      sapClass: _stringFromUnknown(json['sapClass']),
+      assetClassDesc: _stringFromUnknown(json['assetClassDesc']),
+      apcAccount: _stringFromUnknown(json['apcAcct']) ?? _stringFromUnknown(json['apcAccount']),
+      licensePlate: _stringFromUnknown(json['licPlate']) ?? _stringFromUnknown(json['licensePlate']),
+      vendor: _stringFromUnknown(json['vendor']),
+      plant: _stringFromUnknown(json['plnt']) ?? _stringFromUnknown(json['plant']),
+      owner: _stringFromUnknown(json['owner']),
+      vehicleId: _stringFromUnknown(json['vehicleIdNumber']) ??
+          _stringFromUnknown(json['vehicleIdNo']) ??
+          _stringFromUnknown(json['vehicleId']),
+      // Additional Firestore fields
+      subDepartment: _stringFromUnknown(json['subDepartment']),
+      isAvailable: json['isAvailable'] as bool?,
+      isTagged: json['isTagged'] as bool?,
+      isWrittenOff: json['isWrittenOff'] as bool?,
+      itemType: _stringFromUnknown(json['itemType']),
+      modelCode: _stringFromUnknown(json['modelCode']),
+      modelDesc: _stringFromUnknown(json['modelDesc']),
+      modelYear: _stringFromUnknown(json['modelYear']),
+      company: _stringFromUnknown(json['company']),
+      assetType: _stringFromUnknown(json['assetType']),
+      warranty: _stringFromUnknown(json['warranty']),
+      mileage: (json['mileage'] as num?)?.toInt(),
+      registrationDate: _parseTimestamp(json['registrationDate']),
+      serialNumber: _stringFromUnknown(json['serialNumber']),
+      lastMaintenanceDate: _parseTimestamp(json['lastMaintenanceDate']),
+      nextMaintenanceDate: _parseTimestamp(json['nextMaintenanceDate']),
+      maintenanceSchedule: _stringFromUnknown(json['maintenanceSchedule']),
+      assetNumber: _stringFromUnknown(json['assetNumber']),
+      createdAt: _parseTimestamp(json['createdAt']),
+      updatedAt: _parseTimestamp(json['updatedAt']),
     );
   }
 
@@ -456,6 +626,27 @@ class InventoryItem extends FirestoreModel {
       if (plant != null) 'plnt': plant,
       if (owner != null) 'owner': owner,
       if (vehicleId != null) 'vehicleIdNumber': vehicleId,
+      // Additional Firestore fields
+      if (subDepartment != null) 'subDepartment': subDepartment,
+      if (isAvailable != null) 'isAvailable': isAvailable,
+      if (isTagged != null) 'isTagged': isTagged,
+      if (isWrittenOff != null) 'isWrittenOff': isWrittenOff,
+      if (itemType != null) 'itemType': itemType,
+      if (modelCode != null) 'modelCode': modelCode,
+      if (modelDesc != null) 'modelDesc': modelDesc,
+      if (modelYear != null) 'modelYear': modelYear,
+      if (company != null) 'company': company,
+      if (assetType != null) 'assetType': assetType,
+      if (warranty != null) 'warranty': warranty,
+      if (mileage != null) 'mileage': mileage,
+      if (registrationDate != null) 'registrationDate': Timestamp.fromDate(registrationDate!),
+      if (serialNumber != null) 'serialNumber': serialNumber,
+      if (lastMaintenanceDate != null) 'lastMaintenanceDate': Timestamp.fromDate(lastMaintenanceDate!),
+      if (nextMaintenanceDate != null) 'nextMaintenanceDate': Timestamp.fromDate(nextMaintenanceDate!),
+      if (maintenanceSchedule != null) 'maintenanceSchedule': maintenanceSchedule,
+      if (assetNumber != null) 'assetNumber': assetNumber,
+      if (createdAt != null) 'createdAt': Timestamp.fromDate(createdAt!),
+      if (updatedAt != null) 'updatedAt': Timestamp.fromDate(updatedAt!),
     };
   }
 }
@@ -706,15 +897,22 @@ class AppUser extends FirestoreModel {
   final DateTime? createdAt;
 
   factory AppUser.fromJson(String id, Map<String, dynamic> json) {
+    // Handle both Firestore field names: 'name'/'displayName', 'department'/'departmentId', 'roleId'/'role'/'permissionSetId', 'isActive'/'isDisabled'
+    final displayName = json['name'] as String? ?? json['displayName'] as String? ?? id;
+    final departmentId = json['department'] as String? ?? json['departmentId'] as String?;
+    final roleId = json['roleId'] as String? ?? json['role'] as String? ?? json['permissionSetId'] as String?;
+    final isActive = json['isActive'] as bool?;
+    final isDisabled = isActive != null ? !isActive : (json['isDisabled'] as bool? ?? false);
+    
     return AppUser(
       id: id,
       email: json['email'] as String? ?? '',
-      displayName: json['displayName'] as String? ?? id,
+      displayName: displayName,
       phoneNumber: json['phoneNumber'] as String?,
-      departmentId: json['departmentId'] as String?,
+      departmentId: departmentId,
       subDepartmentId: json['subDepartmentId'] as String?,
-      permissionSetId: json['permissionSetId'] as String?,
-      isDisabled: json['isDisabled'] as bool? ?? false,
+      permissionSetId: roleId,
+      isDisabled: isDisabled,
       photoUrl: json['photoUrl'] as String?,
       lastSignIn: _parseTimestamp(json['lastSignIn']),
       createdAt: _parseTimestamp(json['createdAt']),

@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:provider/provider.dart';
+
+import '../services/offline_queue_service.dart';
 import '../utils/network_utils.dart';
 
 /// Widget that shows an offline indicator when device is offline
@@ -41,22 +44,45 @@ class _OfflineIndicatorState extends State<OfflineIndicator> {
 
   @override
   Widget build(BuildContext context) {
+    final queue = context.watch<OfflineQueueService>();
     if (_isOnline) {
-      return const SizedBox.shrink();
+      if (queue.queuedCount == 0) {
+        return const SizedBox.shrink();
+      }
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        color: Theme.of(context).colorScheme.primary,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.sync, color: Theme.of(context).colorScheme.onPrimary, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              queue.isFlushing
+                  ? 'Syncing ${queue.queuedCount} queued action(s)...'
+                  : '${queue.queuedCount} action(s) queued to sync',
+              style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontSize: 12),
+            ),
+          ],
+        ),
+      );
     }
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      color: Colors.orange,
+      color: Theme.of(context).colorScheme.secondary,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Icon(Icons.wifi_off, color: Colors.white, size: 20),
-          SizedBox(width: 8),
+        children: [
+          Icon(Icons.wifi_off, color: Theme.of(context).colorScheme.onPrimary, size: 20),
+          const SizedBox(width: 8),
           Text(
-            'You are offline. Some features may not be available.',
-            style: TextStyle(color: Colors.white, fontSize: 12),
+            queue.queuedCount > 0
+                ? 'Offline. ${queue.queuedCount} action(s) queued.'
+                : 'You are offline. Some features may not be available.',
+            style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontSize: 12),
           ),
         ],
       ),

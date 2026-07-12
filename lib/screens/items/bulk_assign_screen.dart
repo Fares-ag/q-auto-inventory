@@ -164,7 +164,7 @@ class _BulkAssignScreenState extends State<BulkAssignScreen> {
                         ),
                         const SizedBox(height: 16),
                         DropdownButtonFormField<String>(
-                          value: _selectedDepartmentId,
+                          initialValue: _selectedDepartmentId,
                           decoration: const InputDecoration(
                             labelText: 'Department',
                             border: OutlineInputBorder(),
@@ -181,7 +181,7 @@ class _BulkAssignScreenState extends State<BulkAssignScreen> {
                         ),
                         const SizedBox(height: 16),
                         DropdownButtonFormField<String>(
-                          value: _selectedStaffId,
+                          initialValue: _selectedStaffId,
                           decoration: const InputDecoration(
                             labelText: 'Staff Member',
                             border: OutlineInputBorder(),

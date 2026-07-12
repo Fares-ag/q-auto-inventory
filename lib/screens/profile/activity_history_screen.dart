@@ -30,8 +30,11 @@ class ActivityHistoryScreen extends StatelessWidget {
               final entry = entries[index];
               return ListTile(
                 leading: const Icon(Icons.refresh),
-                title: Text(entry.action),
-                subtitle: Text(entry.notes ?? entry.itemId),
+                title: Text(entry.displayTitle),
+                subtitle: Text(
+                  entry.displaySubtitle ??
+                      (entry.itemId.isNotEmpty ? entry.itemId : ''),
+                ),
                 trailing: Text(
                   entry.timestamp?.toLocal().toString().substring(0, 10) ?? '',
                   style: Theme.of(context).textTheme.bodySmall,

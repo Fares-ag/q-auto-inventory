@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/permission_guard.dart';
-import 'data_audit_screen.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
   const AdminDashboardScreen({super.key});
@@ -86,9 +85,8 @@ class AdminDashboardScreen extends StatelessWidget {
                 title: const Text('Data Audit'),
                 subtitle: const Text('View per-collection document counts'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const DataAuditScreen()),
-                ),
+                onTap: () =>
+                    Navigator.of(context).pushNamed('/admin/data-audit'),
               ),
             ),
           ),

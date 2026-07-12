@@ -1,0 +1,23 @@
+name: q_auto_inventory_finance
+publish_to: "none"
+description: Q Auto Inventory — Finance App
+
+version: 1.0.0+1
+
+resolution: workspace
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  q_auto_inventory:
+    path: ../..
+  firebase_core: ^3.1.1
+  firebase_auth: ^5.1.2
+  flutter_riverpod: ^2.5.1
+  provider: ^6.0.5
+
+flutter:
+  uses-material-design: true
